@@ -1,0 +1,10 @@
+{"source_id": "ns=2;i=1000", "target_id": "aas-0", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1001", "target_id": "aas-1", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1002", "target_id": "aas-2", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1003", "target_id": "aas-3", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1004", "target_id": "aas-4", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1005", "target_id": "aas-5", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1006", "target_id": "aas-6", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1007", "target_id": "aas-7", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1008", "target_id": "aas-8", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
+{"source_id": "ns=2;i=1009", "target_id": "aas-9", "relation_type": "fallback", "confidence": 0.2, "evidence_ids": []}
