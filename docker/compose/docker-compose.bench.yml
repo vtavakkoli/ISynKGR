@@ -1,25 +1,20 @@
 services:
-  ollama:
-    image: ollama/ollama:0.5.7
-    ports:
-      - "11434:11434"
-
   isynkgr_hybrid:
     build:
       context: ../..
       dockerfile: docker/sut/isynkgr_hybrid/Dockerfile
     environment:
       DATASET_DIR: ${DATASET_DIR:-/data/crosswalk}
-      OUTPUT_DIR: ${OUTPUT_DIR:-/out}
+      OUTPUT_DIR: ${OUTPUT_DIR:-/out/isynkgr_hybrid}
       CONFIG_PATH: ${CONFIG_PATH:-/config/config.json}
       SUT_MODE: isynkgr_hybrid
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../../datasets/v1:/data
       - ../../results:/out
       - ../../benchmark:/config
-    depends_on:
-      - ollama
 
   llm_only:
     build:
@@ -27,16 +22,16 @@ services:
       dockerfile: docker/sut/llm_only/Dockerfile
     environment:
       DATASET_DIR: ${DATASET_DIR:-/data/crosswalk}
-      OUTPUT_DIR: ${OUTPUT_DIR:-/out}
+      OUTPUT_DIR: ${OUTPUT_DIR:-/out/llm_only}
       CONFIG_PATH: ${CONFIG_PATH:-/config/config.json}
       SUT_MODE: llm_only
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../../datasets/v1:/data
       - ../../results:/out
       - ../../benchmark:/config
-    depends_on:
-      - ollama
 
   rag_only:
     build:
@@ -44,16 +39,16 @@ services:
       dockerfile: docker/sut/rag_only/Dockerfile
     environment:
       DATASET_DIR: ${DATASET_DIR:-/data/crosswalk}
-      OUTPUT_DIR: ${OUTPUT_DIR:-/out}
+      OUTPUT_DIR: ${OUTPUT_DIR:-/out/rag_only}
       CONFIG_PATH: ${CONFIG_PATH:-/config/config.json}
       SUT_MODE: rag_only
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../../datasets/v1:/data
       - ../../results:/out
       - ../../benchmark:/config
-    depends_on:
-      - ollama
 
   rule_only:
     build:
@@ -61,7 +56,7 @@ services:
       dockerfile: docker/sut/rule_only/Dockerfile
     environment:
       DATASET_DIR: ${DATASET_DIR:-/data/crosswalk}
-      OUTPUT_DIR: ${OUTPUT_DIR:-/out}
+      OUTPUT_DIR: ${OUTPUT_DIR:-/out/rule_only}
       CONFIG_PATH: ${CONFIG_PATH:-/config/config.json}
       SUT_MODE: rule_only
     volumes:
@@ -75,7 +70,7 @@ services:
       dockerfile: docker/sut/graph_only/Dockerfile
     environment:
       DATASET_DIR: ${DATASET_DIR:-/data/crosswalk}
-      OUTPUT_DIR: ${OUTPUT_DIR:-/out}
+      OUTPUT_DIR: ${OUTPUT_DIR:-/out/graph_only}
       CONFIG_PATH: ${CONFIG_PATH:-/config/config.json}
       SUT_MODE: graph_only
     volumes:

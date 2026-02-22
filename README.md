@@ -2,15 +2,28 @@
 
 ISynKGR is an industrial translation library for standards-aware artifact translation (hybrid LLM + KG/GraphRAG + rules), plus a container-isolated benchmark framework.
 
-## Quick start
+## Ollama runtime model
+Ollama runs on a host/server outside Docker. Containers connect using `OLLAMA_BASE_URL` (default `http://host.docker.internal:11434`).
 
+## Python package usage (non-Docker)
 ```bash
-make install
-make example-opcua-aas
+pip install .
+# or
+pip install -e .
 ```
 
-## Benchmark quick start
+## Docker workflows
+Quick baseline-first run:
+```bash
+docker-compose up --build quick
+```
 
+Full run (all baseline SUTs):
+```bash
+docker-compose up --build full
+```
+
+## Benchmark quick start (CLI)
 ```bash
 make benchmark-small
 make benchmark-full

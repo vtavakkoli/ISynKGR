@@ -1,4 +1,4 @@
-.PHONY: install lint test example-opcua-aas example-aas-opcua benchmark-small benchmark-full reproduce
+.PHONY: install lint test example-opcua-aas example-aas-opcua benchmark-small benchmark-full reproduce docker-quick docker-full
 
 install:
 	pip install --no-build-isolation -e .
@@ -23,3 +23,10 @@ benchmark-full:
 
 reproduce:
 	PYTHONPATH=. python -m benchmark.harness && PYTHONPATH=. python -m benchmark.harness
+
+
+docker-quick:
+	docker-compose up --build quick
+
+docker-full:
+	docker-compose up --build full
