@@ -1,0 +1,4 @@
+{
+  "mode": "rag_only",
+  "runner": "local-final-report"
+}

@@ -1,15 +1,36 @@
-.PHONY: up gen-samples bench eval down
+.PHONY: install lint test example-opcua-aas example-aas-opcua benchmark-small benchmark-full reproduce docker-quick docker-full final-report
 
-up:
-	@echo "ISynKGR uses system Ollama. Ensure Ollama is running and model is installed: ollama pull qwen3:0.6b"
+install:
+	pip install --no-build-isolation -e .
 
-gen-samples:
-	docker compose run --rm isynkgr-gen-samples
+lint:
+	ruff check isynkgr benchmark tests
 
-bench:
-	docker compose run --rm isynkgr-bench
+test:
+	PYTHONPATH=. pytest -q
 
-eval: bench
+example-opcua-aas:
+	PYTHONPATH=. python examples/translate_opcua_to_aas.py
 
-down:
-	docker compose down
+example-aas-opcua:
+	PYTHONPATH=. python examples/translate_aas_to_opcua.py
+
+benchmark-small:
+	PYTHONPATH=. python -m benchmark.harness
+
+benchmark-full:
+	FULL=1 PYTHONPATH=. python -m benchmark.harness
+
+reproduce:
+	PYTHONPATH=. python -m benchmark.harness && PYTHONPATH=. python -m benchmark.harness
+
+
+docker-quick:
+	docker-compose up --build quick
+
+docker-full:
+	docker-compose up --build full
+
+
+final-report:
+	PYTHONPATH=. python -m benchmark.final_report
