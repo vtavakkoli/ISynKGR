@@ -1,1 +1,7 @@
-__pycache__
+__pycache__/
+*.pyc
+.cache/
+cache/
+output/
+data/samples/
+data/ground_truth/
