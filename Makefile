@@ -1,7 +1,7 @@
 .PHONY: up gen-samples bench eval down
 
 up:
-	@echo "ISynKGR uses system Ollama. Ensure Ollama is running and model is installed: ollama pull qwen3:0.6b"
+	docker compose up -d ollama
 
 gen-samples:
 	docker compose run --rm isynkgr-gen-samples
@@ -12,4 +12,4 @@ bench:
 eval: bench
 
 down:
-	docker compose down
+	docker compose down -v
