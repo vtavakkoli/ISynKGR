@@ -1,0 +1,47 @@
+services:
+  ollama:
+    image: ollama/ollama:0.3.14
+    ports: ["11434:11434"]
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  ollama-init:
+    image: ollama/ollama:0.3.14
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen3:0.6b"]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+
+  isynkgr-gen-samples:
+    build:
+      context: .
+      dockerfile: docker/isynkgr/Dockerfile
+    depends_on:
+      - ollama-init
+    command: ["python", "scripts/gen_samples.py"]
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+      - ./cache:/app/cache
+
+  isynkgr-bench:
+    build:
+      context: .
+      dockerfile: docker/isynkgr/Dockerfile
+    depends_on:
+      - ollama-init
+    command: ["python", "scripts/run_bench.py", "--max-samples", "20"]
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+      - ./cache:/app/cache
+
+volumes:
+  ollama_data:
