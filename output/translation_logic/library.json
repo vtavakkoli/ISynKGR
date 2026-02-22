@@ -1,0 +1,1805 @@
+{
+  "rules": [
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_001:controller",
+          "ieee1451_entity_001:vibration",
+          "ieee1451_entity_001",
+          "ieee1451_entity_001:actuator"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.465337+00:00"
+      },
+      "source_entity": "ieee1451_entity_001",
+      "source_standard": "ieee1451",
+      "target_entity": "iso15926_entity_001",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_002:sensor",
+          "ieee1451_entity_002:controller",
+          "ieee1451_entity_002:vibration",
+          "ieee1451_entity_002"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.465677+00:00"
+      },
+      "source_entity": "ieee1451_entity_002",
+      "source_standard": "ieee1451",
+      "target_entity": "iso15926_entity_002",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_003",
+          "ieee1451_entity_003:vibration",
+          "ieee1451_entity_003:status",
+          "ieee1451_entity_003:controller"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.465959+00:00"
+      },
+      "source_entity": "ieee1451_entity_003",
+      "source_standard": "ieee1451",
+      "target_entity": "iso15926_entity_003",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_004:controller",
+          "ieee1451_entity_004:torque",
+          "ieee1451_entity_004",
+          "ieee1451_entity_004:vibration"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.466356+00:00"
+      },
+      "source_entity": "ieee1451_entity_004",
+      "source_standard": "ieee1451",
+      "target_entity": "iso15926_entity_004",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_005",
+          "ieee1451_entity_005:maintenance",
+          "ieee1451_entity_005:temperature",
+          "ieee1451_entity_005:setpoint"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.466683+00:00"
+      },
+      "source_entity": "ieee1451_entity_005",
+      "source_standard": "ieee1451",
+      "target_entity": "iso15926_entity_005",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_001:controller",
+          "ieee1451_entity_001:vibration",
+          "ieee1451_entity_001",
+          "ieee1451_entity_001:actuator"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.471046+00:00"
+      },
+      "source_entity": "ieee1451_entity_001",
+      "source_standard": "ieee1451",
+      "target_entity": "iec61499_entity_001",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_002:sensor",
+          "ieee1451_entity_002:controller",
+          "ieee1451_entity_002:vibration",
+          "ieee1451_entity_002"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.471477+00:00"
+      },
+      "source_entity": "ieee1451_entity_002",
+      "source_standard": "ieee1451",
+      "target_entity": "iec61499_entity_002",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_003",
+          "ieee1451_entity_003:vibration",
+          "ieee1451_entity_003:status",
+          "ieee1451_entity_003:controller"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.471895+00:00"
+      },
+      "source_entity": "ieee1451_entity_003",
+      "source_standard": "ieee1451",
+      "target_entity": "iec61499_entity_003",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_004:controller",
+          "ieee1451_entity_004:torque",
+          "ieee1451_entity_004",
+          "ieee1451_entity_004:vibration"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.472317+00:00"
+      },
+      "source_entity": "ieee1451_entity_004",
+      "source_standard": "ieee1451",
+      "target_entity": "iec61499_entity_004",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_005",
+          "ieee1451_entity_005:maintenance",
+          "ieee1451_entity_005:temperature",
+          "ieee1451_entity_005:setpoint"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.472743+00:00"
+      },
+      "source_entity": "ieee1451_entity_005",
+      "source_standard": "ieee1451",
+      "target_entity": "iec61499_entity_005",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_001:controller",
+          "ieee1451_entity_001:vibration",
+          "ieee1451_entity_001",
+          "ieee1451_entity_001:actuator"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.475738+00:00"
+      },
+      "source_entity": "ieee1451_entity_001",
+      "source_standard": "ieee1451",
+      "target_entity": "opcua62541_entity_001",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_002:sensor",
+          "ieee1451_entity_002:controller",
+          "ieee1451_entity_002:vibration",
+          "ieee1451_entity_002"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.476224+00:00"
+      },
+      "source_entity": "ieee1451_entity_002",
+      "source_standard": "ieee1451",
+      "target_entity": "opcua62541_entity_002",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_003",
+          "ieee1451_entity_003:vibration",
+          "ieee1451_entity_003:status",
+          "ieee1451_entity_003:controller"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.476713+00:00"
+      },
+      "source_entity": "ieee1451_entity_003",
+      "source_standard": "ieee1451",
+      "target_entity": "opcua62541_entity_003",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_004:controller",
+          "ieee1451_entity_004:torque",
+          "ieee1451_entity_004",
+          "ieee1451_entity_004:vibration"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.477221+00:00"
+      },
+      "source_entity": "ieee1451_entity_004",
+      "source_standard": "ieee1451",
+      "target_entity": "opcua62541_entity_004",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_005",
+          "ieee1451_entity_005:maintenance",
+          "ieee1451_entity_005:temperature",
+          "ieee1451_entity_005:setpoint"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.477750+00:00"
+      },
+      "source_entity": "ieee1451_entity_005",
+      "source_standard": "ieee1451",
+      "target_entity": "opcua62541_entity_005",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_001:controller",
+          "ieee1451_entity_001:vibration",
+          "ieee1451_entity_001",
+          "ieee1451_entity_001:actuator"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.480802+00:00"
+      },
+      "source_entity": "ieee1451_entity_001",
+      "source_standard": "ieee1451",
+      "target_entity": "aas63278_entity_001",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_002:sensor",
+          "ieee1451_entity_002:controller",
+          "ieee1451_entity_002:vibration",
+          "ieee1451_entity_002"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.481367+00:00"
+      },
+      "source_entity": "ieee1451_entity_002",
+      "source_standard": "ieee1451",
+      "target_entity": "aas63278_entity_002",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_003",
+          "ieee1451_entity_003:vibration",
+          "ieee1451_entity_003:status",
+          "ieee1451_entity_003:controller"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.481942+00:00"
+      },
+      "source_entity": "ieee1451_entity_003",
+      "source_standard": "ieee1451",
+      "target_entity": "aas63278_entity_003",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_004:controller",
+          "ieee1451_entity_004:torque",
+          "ieee1451_entity_004",
+          "ieee1451_entity_004:vibration"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.482544+00:00"
+      },
+      "source_entity": "ieee1451_entity_004",
+      "source_standard": "ieee1451",
+      "target_entity": "aas63278_entity_004",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "ieee1451_entity_005",
+          "ieee1451_entity_005:maintenance",
+          "ieee1451_entity_005:temperature",
+          "ieee1451_entity_005:setpoint"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.483160+00:00"
+      },
+      "source_entity": "ieee1451_entity_005",
+      "source_standard": "ieee1451",
+      "target_entity": "aas63278_entity_005",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_001:quality",
+          "iso15926_entity_001:sensor",
+          "iso15926_entity_001",
+          "iso15926_entity_001:energy"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.486067+00:00"
+      },
+      "source_entity": "iso15926_entity_001",
+      "source_standard": "iso15926",
+      "target_entity": "ieee1451_entity_001",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_002:setpoint",
+          "iso15926_entity_002",
+          "iso15926_entity_002:quality",
+          "iso15926_entity_002:controller"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.486747+00:00"
+      },
+      "source_entity": "iso15926_entity_002",
+      "source_standard": "iso15926",
+      "target_entity": "ieee1451_entity_002",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_003",
+          "iso15926_entity_003:quality",
+          "iso15926_entity_003:pressure",
+          "iso15926_entity_003:speed"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.487443+00:00"
+      },
+      "source_entity": "iso15926_entity_003",
+      "source_standard": "iso15926",
+      "target_entity": "ieee1451_entity_003",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_004:controller",
+          "iso15926_entity_004:sensor",
+          "iso15926_entity_004:pressure",
+          "iso15926_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.488118+00:00"
+      },
+      "source_entity": "iso15926_entity_004",
+      "source_standard": "iso15926",
+      "target_entity": "ieee1451_entity_004",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_005:controller",
+          "iso15926_entity_005",
+          "iso15926_entity_005:speed",
+          "iso15926_entity_005:sensor"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.488782+00:00"
+      },
+      "source_entity": "iso15926_entity_005",
+      "source_standard": "iso15926",
+      "target_entity": "ieee1451_entity_005",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_001:quality",
+          "iso15926_entity_001:sensor",
+          "iso15926_entity_001",
+          "iso15926_entity_001:energy"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.492008+00:00"
+      },
+      "source_entity": "iso15926_entity_001",
+      "source_standard": "iso15926",
+      "target_entity": "iec61499_entity_001",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_002:setpoint",
+          "iso15926_entity_002",
+          "iso15926_entity_002:quality",
+          "iso15926_entity_002:controller"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.492779+00:00"
+      },
+      "source_entity": "iso15926_entity_002",
+      "source_standard": "iso15926",
+      "target_entity": "iec61499_entity_002",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_003",
+          "iso15926_entity_003:quality",
+          "iso15926_entity_003:pressure",
+          "iso15926_entity_003:speed"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.493488+00:00"
+      },
+      "source_entity": "iso15926_entity_003",
+      "source_standard": "iso15926",
+      "target_entity": "iec61499_entity_003",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_004:controller",
+          "iso15926_entity_004:sensor",
+          "iso15926_entity_004:pressure",
+          "iso15926_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.494216+00:00"
+      },
+      "source_entity": "iso15926_entity_004",
+      "source_standard": "iso15926",
+      "target_entity": "iec61499_entity_004",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_005:controller",
+          "iso15926_entity_005",
+          "iso15926_entity_005:speed",
+          "iso15926_entity_005:sensor"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.495031+00:00"
+      },
+      "source_entity": "iso15926_entity_005",
+      "source_standard": "iso15926",
+      "target_entity": "iec61499_entity_005",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_001:quality",
+          "iso15926_entity_001:sensor",
+          "iso15926_entity_001",
+          "iso15926_entity_001:energy"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.498099+00:00"
+      },
+      "source_entity": "iso15926_entity_001",
+      "source_standard": "iso15926",
+      "target_entity": "opcua62541_entity_001",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_002:setpoint",
+          "iso15926_entity_002",
+          "iso15926_entity_002:quality",
+          "iso15926_entity_002:controller"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.498964+00:00"
+      },
+      "source_entity": "iso15926_entity_002",
+      "source_standard": "iso15926",
+      "target_entity": "opcua62541_entity_002",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_003",
+          "iso15926_entity_003:quality",
+          "iso15926_entity_003:pressure",
+          "iso15926_entity_003:speed"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.499807+00:00"
+      },
+      "source_entity": "iso15926_entity_003",
+      "source_standard": "iso15926",
+      "target_entity": "opcua62541_entity_003",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_004:controller",
+          "iso15926_entity_004:sensor",
+          "iso15926_entity_004:pressure",
+          "iso15926_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.500639+00:00"
+      },
+      "source_entity": "iso15926_entity_004",
+      "source_standard": "iso15926",
+      "target_entity": "opcua62541_entity_004",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_005:controller",
+          "iso15926_entity_005",
+          "iso15926_entity_005:speed",
+          "iso15926_entity_005:sensor"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.501472+00:00"
+      },
+      "source_entity": "iso15926_entity_005",
+      "source_standard": "iso15926",
+      "target_entity": "opcua62541_entity_005",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_001:quality",
+          "iso15926_entity_001:sensor",
+          "iso15926_entity_001",
+          "iso15926_entity_001:energy"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.504780+00:00"
+      },
+      "source_entity": "iso15926_entity_001",
+      "source_standard": "iso15926",
+      "target_entity": "aas63278_entity_001",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_002:setpoint",
+          "iso15926_entity_002",
+          "iso15926_entity_002:quality",
+          "iso15926_entity_002:controller"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.505766+00:00"
+      },
+      "source_entity": "iso15926_entity_002",
+      "source_standard": "iso15926",
+      "target_entity": "aas63278_entity_002",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_003",
+          "iso15926_entity_003:quality",
+          "iso15926_entity_003:pressure",
+          "iso15926_entity_003:speed"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.506738+00:00"
+      },
+      "source_entity": "iso15926_entity_003",
+      "source_standard": "iso15926",
+      "target_entity": "aas63278_entity_003",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_004:controller",
+          "iso15926_entity_004:sensor",
+          "iso15926_entity_004:pressure",
+          "iso15926_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.507732+00:00"
+      },
+      "source_entity": "iso15926_entity_004",
+      "source_standard": "iso15926",
+      "target_entity": "aas63278_entity_004",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iso15926_entity_005:controller",
+          "iso15926_entity_005",
+          "iso15926_entity_005:speed",
+          "iso15926_entity_005:sensor"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.508682+00:00"
+      },
+      "source_entity": "iso15926_entity_005",
+      "source_standard": "iso15926",
+      "target_entity": "aas63278_entity_005",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_001:energy",
+          "iec61499_entity_001:batch",
+          "iec61499_entity_001",
+          "iec61499_entity_001:speed"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.512035+00:00"
+      },
+      "source_entity": "iec61499_entity_001",
+      "source_standard": "iec61499",
+      "target_entity": "ieee1451_entity_001",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_002",
+          "iec61499_entity_002:energy",
+          "iec61499_entity_002:torque",
+          "iec61499_entity_002:pressure"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.513055+00:00"
+      },
+      "source_entity": "iec61499_entity_002",
+      "source_standard": "iec61499",
+      "target_entity": "ieee1451_entity_002",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_003:alarm",
+          "iec61499_entity_003:pressure",
+          "iec61499_entity_003",
+          "iec61499_entity_003:actuator"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.514027+00:00"
+      },
+      "source_entity": "iec61499_entity_003",
+      "source_standard": "iec61499",
+      "target_entity": "ieee1451_entity_003",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_004:vibration",
+          "iec61499_entity_004:alarm",
+          "iec61499_entity_004:temperature",
+          "iec61499_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.515087+00:00"
+      },
+      "source_entity": "iec61499_entity_004",
+      "source_standard": "iec61499",
+      "target_entity": "ieee1451_entity_004",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_005:flow",
+          "iec61499_entity_005:batch",
+          "iec61499_entity_005",
+          "iec61499_entity_005:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.516111+00:00"
+      },
+      "source_entity": "iec61499_entity_005",
+      "source_standard": "iec61499",
+      "target_entity": "ieee1451_entity_005",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_001:energy",
+          "iec61499_entity_001:batch",
+          "iec61499_entity_001",
+          "iec61499_entity_001:speed"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.519447+00:00"
+      },
+      "source_entity": "iec61499_entity_001",
+      "source_standard": "iec61499",
+      "target_entity": "iso15926_entity_001",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_002",
+          "iec61499_entity_002:energy",
+          "iec61499_entity_002:torque",
+          "iec61499_entity_002:pressure"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.520602+00:00"
+      },
+      "source_entity": "iec61499_entity_002",
+      "source_standard": "iec61499",
+      "target_entity": "iso15926_entity_002",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_003:alarm",
+          "iec61499_entity_003:pressure",
+          "iec61499_entity_003",
+          "iec61499_entity_003:actuator"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.521727+00:00"
+      },
+      "source_entity": "iec61499_entity_003",
+      "source_standard": "iec61499",
+      "target_entity": "iso15926_entity_003",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_004:vibration",
+          "iec61499_entity_004:alarm",
+          "iec61499_entity_004:temperature",
+          "iec61499_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.522926+00:00"
+      },
+      "source_entity": "iec61499_entity_004",
+      "source_standard": "iec61499",
+      "target_entity": "iso15926_entity_004",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_005:flow",
+          "iec61499_entity_005:batch",
+          "iec61499_entity_005",
+          "iec61499_entity_005:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.524177+00:00"
+      },
+      "source_entity": "iec61499_entity_005",
+      "source_standard": "iec61499",
+      "target_entity": "iso15926_entity_005",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_001:energy",
+          "iec61499_entity_001:batch",
+          "iec61499_entity_001",
+          "iec61499_entity_001:speed"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.527832+00:00"
+      },
+      "source_entity": "iec61499_entity_001",
+      "source_standard": "iec61499",
+      "target_entity": "opcua62541_entity_001",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_002",
+          "iec61499_entity_002:energy",
+          "iec61499_entity_002:torque",
+          "iec61499_entity_002:pressure"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.529059+00:00"
+      },
+      "source_entity": "iec61499_entity_002",
+      "source_standard": "iec61499",
+      "target_entity": "opcua62541_entity_002",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_003:alarm",
+          "iec61499_entity_003:pressure",
+          "iec61499_entity_003",
+          "iec61499_entity_003:actuator"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.530197+00:00"
+      },
+      "source_entity": "iec61499_entity_003",
+      "source_standard": "iec61499",
+      "target_entity": "opcua62541_entity_003",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_004:vibration",
+          "iec61499_entity_004:alarm",
+          "iec61499_entity_004:temperature",
+          "iec61499_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.531456+00:00"
+      },
+      "source_entity": "iec61499_entity_004",
+      "source_standard": "iec61499",
+      "target_entity": "opcua62541_entity_004",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_005:flow",
+          "iec61499_entity_005:batch",
+          "iec61499_entity_005",
+          "iec61499_entity_005:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.532787+00:00"
+      },
+      "source_entity": "iec61499_entity_005",
+      "source_standard": "iec61499",
+      "target_entity": "opcua62541_entity_005",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_001:energy",
+          "iec61499_entity_001:batch",
+          "iec61499_entity_001",
+          "iec61499_entity_001:speed"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.536332+00:00"
+      },
+      "source_entity": "iec61499_entity_001",
+      "source_standard": "iec61499",
+      "target_entity": "aas63278_entity_001",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_002",
+          "iec61499_entity_002:energy",
+          "iec61499_entity_002:torque",
+          "iec61499_entity_002:pressure"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.537629+00:00"
+      },
+      "source_entity": "iec61499_entity_002",
+      "source_standard": "iec61499",
+      "target_entity": "aas63278_entity_002",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_003:alarm",
+          "iec61499_entity_003:pressure",
+          "iec61499_entity_003",
+          "iec61499_entity_003:actuator"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.538914+00:00"
+      },
+      "source_entity": "iec61499_entity_003",
+      "source_standard": "iec61499",
+      "target_entity": "aas63278_entity_003",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_004:vibration",
+          "iec61499_entity_004:alarm",
+          "iec61499_entity_004:temperature",
+          "iec61499_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.540160+00:00"
+      },
+      "source_entity": "iec61499_entity_004",
+      "source_standard": "iec61499",
+      "target_entity": "aas63278_entity_004",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "iec61499_entity_005:flow",
+          "iec61499_entity_005:batch",
+          "iec61499_entity_005",
+          "iec61499_entity_005:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.541412+00:00"
+      },
+      "source_entity": "iec61499_entity_005",
+      "source_standard": "iec61499",
+      "target_entity": "aas63278_entity_005",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_001:energy",
+          "opcua62541_entity_001",
+          "opcua62541_entity_001:flow",
+          "opcua62541_entity_001:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.544984+00:00"
+      },
+      "source_entity": "opcua62541_entity_001",
+      "source_standard": "opcua62541",
+      "target_entity": "ieee1451_entity_001",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_002:speed",
+          "opcua62541_entity_002:pressure",
+          "opcua62541_entity_002",
+          "opcua62541_entity_002:status"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.546288+00:00"
+      },
+      "source_entity": "opcua62541_entity_002",
+      "source_standard": "opcua62541",
+      "target_entity": "ieee1451_entity_002",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_003:temperature",
+          "opcua62541_entity_003:energy",
+          "opcua62541_entity_003:controller",
+          "opcua62541_entity_003"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.547759+00:00"
+      },
+      "source_entity": "opcua62541_entity_003",
+      "source_standard": "opcua62541",
+      "target_entity": "ieee1451_entity_003",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_004:batch",
+          "opcua62541_entity_004",
+          "opcua62541_entity_004:temperature",
+          "opcua62541_entity_004:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.549093+00:00"
+      },
+      "source_entity": "opcua62541_entity_004",
+      "source_standard": "opcua62541",
+      "target_entity": "ieee1451_entity_004",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_005:flow",
+          "opcua62541_entity_005",
+          "opcua62541_entity_005:speed",
+          "opcua62541_entity_005:vibration"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.550479+00:00"
+      },
+      "source_entity": "opcua62541_entity_005",
+      "source_standard": "opcua62541",
+      "target_entity": "ieee1451_entity_005",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_001:energy",
+          "opcua62541_entity_001",
+          "opcua62541_entity_001:flow",
+          "opcua62541_entity_001:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.554113+00:00"
+      },
+      "source_entity": "opcua62541_entity_001",
+      "source_standard": "opcua62541",
+      "target_entity": "iso15926_entity_001",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_002:speed",
+          "opcua62541_entity_002:pressure",
+          "opcua62541_entity_002",
+          "opcua62541_entity_002:status"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.555639+00:00"
+      },
+      "source_entity": "opcua62541_entity_002",
+      "source_standard": "opcua62541",
+      "target_entity": "iso15926_entity_002",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_003:temperature",
+          "opcua62541_entity_003:energy",
+          "opcua62541_entity_003:controller",
+          "opcua62541_entity_003"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.557306+00:00"
+      },
+      "source_entity": "opcua62541_entity_003",
+      "source_standard": "opcua62541",
+      "target_entity": "iso15926_entity_003",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_004:batch",
+          "opcua62541_entity_004",
+          "opcua62541_entity_004:temperature",
+          "opcua62541_entity_004:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.558757+00:00"
+      },
+      "source_entity": "opcua62541_entity_004",
+      "source_standard": "opcua62541",
+      "target_entity": "iso15926_entity_004",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_005:flow",
+          "opcua62541_entity_005",
+          "opcua62541_entity_005:speed",
+          "opcua62541_entity_005:vibration"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.560247+00:00"
+      },
+      "source_entity": "opcua62541_entity_005",
+      "source_standard": "opcua62541",
+      "target_entity": "iso15926_entity_005",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_001:energy",
+          "opcua62541_entity_001",
+          "opcua62541_entity_001:flow",
+          "opcua62541_entity_001:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.564061+00:00"
+      },
+      "source_entity": "opcua62541_entity_001",
+      "source_standard": "opcua62541",
+      "target_entity": "iec61499_entity_001",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_002:speed",
+          "opcua62541_entity_002:pressure",
+          "opcua62541_entity_002",
+          "opcua62541_entity_002:status"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.565571+00:00"
+      },
+      "source_entity": "opcua62541_entity_002",
+      "source_standard": "opcua62541",
+      "target_entity": "iec61499_entity_002",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_003:temperature",
+          "opcua62541_entity_003:energy",
+          "opcua62541_entity_003:controller",
+          "opcua62541_entity_003"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.567260+00:00"
+      },
+      "source_entity": "opcua62541_entity_003",
+      "source_standard": "opcua62541",
+      "target_entity": "iec61499_entity_003",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_004:batch",
+          "opcua62541_entity_004",
+          "opcua62541_entity_004:temperature",
+          "opcua62541_entity_004:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.568769+00:00"
+      },
+      "source_entity": "opcua62541_entity_004",
+      "source_standard": "opcua62541",
+      "target_entity": "iec61499_entity_004",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_005:flow",
+          "opcua62541_entity_005",
+          "opcua62541_entity_005:speed",
+          "opcua62541_entity_005:vibration"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.570285+00:00"
+      },
+      "source_entity": "opcua62541_entity_005",
+      "source_standard": "opcua62541",
+      "target_entity": "iec61499_entity_005",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_001:energy",
+          "opcua62541_entity_001",
+          "opcua62541_entity_001:flow",
+          "opcua62541_entity_001:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.574142+00:00"
+      },
+      "source_entity": "opcua62541_entity_001",
+      "source_standard": "opcua62541",
+      "target_entity": "aas63278_entity_001",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_002:speed",
+          "opcua62541_entity_002:pressure",
+          "opcua62541_entity_002",
+          "opcua62541_entity_002:status"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.575840+00:00"
+      },
+      "source_entity": "opcua62541_entity_002",
+      "source_standard": "opcua62541",
+      "target_entity": "aas63278_entity_002",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_003:temperature",
+          "opcua62541_entity_003:energy",
+          "opcua62541_entity_003:controller",
+          "opcua62541_entity_003"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.577412+00:00"
+      },
+      "source_entity": "opcua62541_entity_003",
+      "source_standard": "opcua62541",
+      "target_entity": "aas63278_entity_003",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_004:batch",
+          "opcua62541_entity_004",
+          "opcua62541_entity_004:temperature",
+          "opcua62541_entity_004:torque"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.579062+00:00"
+      },
+      "source_entity": "opcua62541_entity_004",
+      "source_standard": "opcua62541",
+      "target_entity": "aas63278_entity_004",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "opcua62541_entity_005:flow",
+          "opcua62541_entity_005",
+          "opcua62541_entity_005:speed",
+          "opcua62541_entity_005:vibration"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.580646+00:00"
+      },
+      "source_entity": "opcua62541_entity_005",
+      "source_standard": "opcua62541",
+      "target_entity": "aas63278_entity_005",
+      "target_standard": "aas63278"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_001",
+          "aas63278_entity_001:torque",
+          "aas63278_entity_001:sensor",
+          "aas63278_entity_001:setpoint"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.584517+00:00"
+      },
+      "source_entity": "aas63278_entity_001",
+      "source_standard": "aas63278",
+      "target_entity": "ieee1451_entity_001",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_002:torque",
+          "aas63278_entity_002:sensor",
+          "aas63278_entity_002",
+          "aas63278_entity_002:alarm"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.586133+00:00"
+      },
+      "source_entity": "aas63278_entity_002",
+      "source_standard": "aas63278",
+      "target_entity": "ieee1451_entity_002",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_003",
+          "aas63278_entity_003:controller",
+          "aas63278_entity_003:pressure",
+          "aas63278_entity_003:flow"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.587805+00:00"
+      },
+      "source_entity": "aas63278_entity_003",
+      "source_standard": "aas63278",
+      "target_entity": "ieee1451_entity_003",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_004:torque",
+          "aas63278_entity_004:status",
+          "aas63278_entity_004:quality",
+          "aas63278_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.589446+00:00"
+      },
+      "source_entity": "aas63278_entity_004",
+      "source_standard": "aas63278",
+      "target_entity": "ieee1451_entity_004",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_005:torque",
+          "aas63278_entity_005",
+          "aas63278_entity_005:pressure",
+          "aas63278_entity_005:temperature"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.591171+00:00"
+      },
+      "source_entity": "aas63278_entity_005",
+      "source_standard": "aas63278",
+      "target_entity": "ieee1451_entity_005",
+      "target_standard": "ieee1451"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_001",
+          "aas63278_entity_001:torque",
+          "aas63278_entity_001:sensor",
+          "aas63278_entity_001:setpoint"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.595604+00:00"
+      },
+      "source_entity": "aas63278_entity_001",
+      "source_standard": "aas63278",
+      "target_entity": "iso15926_entity_001",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_002:torque",
+          "aas63278_entity_002:sensor",
+          "aas63278_entity_002",
+          "aas63278_entity_002:alarm"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.597317+00:00"
+      },
+      "source_entity": "aas63278_entity_002",
+      "source_standard": "aas63278",
+      "target_entity": "iso15926_entity_002",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_003",
+          "aas63278_entity_003:controller",
+          "aas63278_entity_003:pressure",
+          "aas63278_entity_003:flow"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.599120+00:00"
+      },
+      "source_entity": "aas63278_entity_003",
+      "source_standard": "aas63278",
+      "target_entity": "iso15926_entity_003",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_004:torque",
+          "aas63278_entity_004:status",
+          "aas63278_entity_004:quality",
+          "aas63278_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.600885+00:00"
+      },
+      "source_entity": "aas63278_entity_004",
+      "source_standard": "aas63278",
+      "target_entity": "iso15926_entity_004",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_005:torque",
+          "aas63278_entity_005",
+          "aas63278_entity_005:pressure",
+          "aas63278_entity_005:temperature"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.602662+00:00"
+      },
+      "source_entity": "aas63278_entity_005",
+      "source_standard": "aas63278",
+      "target_entity": "iso15926_entity_005",
+      "target_standard": "iso15926"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_001",
+          "aas63278_entity_001:torque",
+          "aas63278_entity_001:sensor",
+          "aas63278_entity_001:setpoint"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.606735+00:00"
+      },
+      "source_entity": "aas63278_entity_001",
+      "source_standard": "aas63278",
+      "target_entity": "iec61499_entity_001",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_002:torque",
+          "aas63278_entity_002:sensor",
+          "aas63278_entity_002",
+          "aas63278_entity_002:alarm"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.608717+00:00"
+      },
+      "source_entity": "aas63278_entity_002",
+      "source_standard": "aas63278",
+      "target_entity": "iec61499_entity_002",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_003",
+          "aas63278_entity_003:controller",
+          "aas63278_entity_003:pressure",
+          "aas63278_entity_003:flow"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.610577+00:00"
+      },
+      "source_entity": "aas63278_entity_003",
+      "source_standard": "aas63278",
+      "target_entity": "iec61499_entity_003",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_004:torque",
+          "aas63278_entity_004:status",
+          "aas63278_entity_004:quality",
+          "aas63278_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.612419+00:00"
+      },
+      "source_entity": "aas63278_entity_004",
+      "source_standard": "aas63278",
+      "target_entity": "iec61499_entity_004",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_005:torque",
+          "aas63278_entity_005",
+          "aas63278_entity_005:pressure",
+          "aas63278_entity_005:temperature"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.614236+00:00"
+      },
+      "source_entity": "aas63278_entity_005",
+      "source_standard": "aas63278",
+      "target_entity": "iec61499_entity_005",
+      "target_standard": "iec61499"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_001",
+          "aas63278_entity_001:torque",
+          "aas63278_entity_001:sensor",
+          "aas63278_entity_001:setpoint"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.618374+00:00"
+      },
+      "source_entity": "aas63278_entity_001",
+      "source_standard": "aas63278",
+      "target_entity": "opcua62541_entity_001",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_002:torque",
+          "aas63278_entity_002:sensor",
+          "aas63278_entity_002",
+          "aas63278_entity_002:alarm"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.620382+00:00"
+      },
+      "source_entity": "aas63278_entity_002",
+      "source_standard": "aas63278",
+      "target_entity": "opcua62541_entity_002",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_003",
+          "aas63278_entity_003:controller",
+          "aas63278_entity_003:pressure",
+          "aas63278_entity_003:flow"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.622361+00:00"
+      },
+      "source_entity": "aas63278_entity_003",
+      "source_standard": "aas63278",
+      "target_entity": "opcua62541_entity_003",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_004:torque",
+          "aas63278_entity_004:status",
+          "aas63278_entity_004:quality",
+          "aas63278_entity_004"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.624315+00:00"
+      },
+      "source_entity": "aas63278_entity_004",
+      "source_standard": "aas63278",
+      "target_entity": "opcua62541_entity_004",
+      "target_standard": "opcua62541"
+    },
+    {
+      "confidence": 1.0,
+      "provenance": {
+        "model": "qwen3:0.6b",
+        "prompt_template": "prompts/v1/reasoning_check.txt",
+        "retrieved_subgraph_ids": [
+          "aas63278_entity_005:torque",
+          "aas63278_entity_005",
+          "aas63278_entity_005:pressure",
+          "aas63278_entity_005:temperature"
+        ],
+        "timestamp_utc": "2026-02-22T00:28:19.626334+00:00"
+      },
+      "source_entity": "aas63278_entity_005",
+      "source_standard": "aas63278",
+      "target_entity": "opcua62541_entity_005",
+      "target_standard": "opcua62541"
+    }
+  ],
+  "version": "1.0.0"
+}
