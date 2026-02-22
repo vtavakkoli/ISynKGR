@@ -28,6 +28,7 @@ def main() -> None:
 
     mapping_lines = []
     validations = []
+    llm_bugs = []
     opc_files = sorted((dataset_dir.parent / "opcua" / "synthetic").glob("*.xml"))[:3]
     total = len(opc_files)
     log(f"[SUITE] mode={mode} total={total} completed=0 remaining={total}")
@@ -38,6 +39,11 @@ def main() -> None:
 
         i = int(f.stem.split("_")[-1])
         result = translator.translate("opcua", "aas", str(f), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
+        llm_error = (result.provenance.metadata or {}).get("llm_error") if result.provenance else None
+        if llm_error:
+            llm_bugs.append({"sample": f.name, "mode": mode, "error": llm_error})
+            log(f"[BUG] mode={mode} sample={f.name} issue=llm_request_failed details={llm_error}")
+
         for m in result.mappings:
             mapping_lines.append(json.dumps(m.model_dump()))
         if not result.mappings:
@@ -60,7 +66,8 @@ def main() -> None:
 
     (output_dir / "mappings.jsonl").write_text("\n".join(mapping_lines) + ("\n" if mapping_lines else ""))
     (output_dir / "validation.json").write_text(json.dumps(validations, indent=2))
-    (output_dir / "provenance.json").write_text(json.dumps({"mode": mode, "dataset": str(dataset_dir)}, indent=2))
+    (output_dir / "provenance.json").write_text(json.dumps({"mode": mode, "dataset": str(dataset_dir), "llm_bug_count": len(llm_bugs)}, indent=2))
+    (output_dir / "bugs.json").write_text(json.dumps(llm_bugs, indent=2))
     log(f"[SUITE-END] mode={mode} total={total} completed={total} remaining=0")
 
 
