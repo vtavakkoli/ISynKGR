@@ -128,18 +128,15 @@ services:
       - ./benchmark:/config
 
   full:
-    image: alpine:3.20
-    command: ["sh", "-c", "echo Full benchmark services completed"]
-    depends_on:
-      dataset_validate:
-        condition: service_completed_successfully
-      isynkgr_hybrid:
-        condition: service_completed_successfully
-      llm_only:
-        condition: service_completed_successfully
-      rag_only:
-        condition: service_completed_successfully
-      rule_only:
-        condition: service_completed_successfully
-      graph_only:
-        condition: service_completed_successfully
+    build:
+      context: .
+      dockerfile: docker/sut/rule_only/Dockerfile
+    command: ["python", "-m", "benchmark.full_workflow"]
+    environment:
+      BENCHMARK_CONFIG: /config/benchmark_full.json
+      PROFILE: ${PROFILE:-full}
+    volumes:
+      - ./:/app
+      - ./benchmark:/config
+      - ./artifacts:/app/artifacts
+      - ./results:/app/results
