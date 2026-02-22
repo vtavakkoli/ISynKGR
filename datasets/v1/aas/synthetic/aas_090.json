@@ -1,0 +1,31 @@
+{
+  "assetAdministrationShells": [
+    {
+      "id": "aas-90",
+      "idShort": "PumpAAS90",
+      "submodels": [
+        {
+          "keys": [
+            {
+              "value": "sm-90"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "id": "sm-90",
+      "idShort": "Telemetry90",
+      "submodelElements": [
+        {
+          "idShort": "pressure",
+          "modelType": "Property",
+          "valueType": "double",
+          "value": "100"
+        }
+      ]
+    }
+  ]
+}

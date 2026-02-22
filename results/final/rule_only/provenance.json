@@ -1,0 +1,4 @@
+{
+  "mode": "rule_only",
+  "runner": "local-final-report"
+}

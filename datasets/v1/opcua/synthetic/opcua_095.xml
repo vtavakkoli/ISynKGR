@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UANodeSet xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+  <UAObjectType NodeId="ns=2;i=1095" BrowseName="2:Pump95">
+    <DisplayName>Pump95</DisplayName>
+    <References><Reference ReferenceType="HasComponent">ns=2;i=2095</Reference></References>
+  </UAObjectType>
+  <UAVariable NodeId="ns=2;i=2095" BrowseName="2:Pressure95">
+    <DisplayName>Pressure95</DisplayName>
+  </UAVariable>
+</UANodeSet>

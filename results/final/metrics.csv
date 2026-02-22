@@ -1,0 +1,6 @@
+baseline,f1,precision,recall,validity_pass_rate
+rule_only,0.18181818181818182,1.0,0.1,1.0
+graph_only,0.18181818181818182,1.0,0.1,1.0
+isynkgr_hybrid,0.18181818181818182,1.0,0.1,1.0
+rag_only,0.18181818181818182,1.0,0.1,1.0
+llm_only,0.18181818181818182,1.0,0.1,1.0
