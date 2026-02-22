@@ -1,16 +1,6 @@
 # ISynKGR (Industrial Semantic Knowledge Graph Reasoner)
 
-ISynKGR is a reproducible, Dockerized benchmarking framework for industrial semantic translation across IEEE 1451, ISO 15926, IEC 61499, OPC UA (IEC 62541), and AAS (IEC 63278).
-
-## Project layout
-
-The framework is isolated in its own package folder:
-
-- `isynkgr/` → core framework code (LLM adapter, retrieval, data generation, benchmark harness)
-- `docker/` + `docker-compose.yml` → container runtime
-- `prompts/` → versioned deterministic prompts
-- `data/demo_sources/` → minimal in-repo source snapshots
-- `scripts/` → cross-platform entrypoints (`.py`, `.ps1`, `.cmd`)
+ISynKGR is a reproducible, Dockerized benchmarking framework for industrial standard translation across IEEE 1451, ISO 15926, IEC 61499, OPC UA (IEC 62541), and AAS (IEC 63278).
 
 ## Architecture
 
@@ -23,7 +13,7 @@ flowchart LR
   E --> F[Metrics + Plots]
 ```
 
-## Quickstart (Docker)
+## Quickstart
 
 ```bash
 make up
@@ -32,20 +22,10 @@ make bench
 make down
 ```
 
-## Windows support
+## Docker-only workflow
 
-You can run directly with Docker Compose on Windows (PowerShell/CMD):
-
-```powershell
-docker compose up -d ollama
-docker compose run --rm isynkgr-gen-samples
-docker compose run --rm isynkgr-bench
-docker compose down -v
-```
-
-Optional helper scripts:
-- PowerShell: `scripts/gen_samples.ps1`, `scripts/run_bench.ps1`
-- CMD: `scripts/gen_samples.cmd`, `scripts/run_bench.cmd`
+- `docker compose run --rm isynkgr-gen-samples` generates 100 samples/standard + deterministic GT.
+- `docker compose run --rm isynkgr-bench` runs ISynKGR + baselines and writes `output/benchmarks/<timestamp>/`.
 
 ## Reproducibility controls
 
@@ -53,4 +33,3 @@ Optional helper scripts:
 - Fixed prompt template in `prompts/v1/`
 - File-based LLM cache in `cache/llm`
 - Pinned dependency lock (`requirements.lock`)
-- Deterministic output refresh to `output/benchmarks/latest` (directory copy, no symlink)

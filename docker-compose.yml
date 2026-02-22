@@ -25,7 +25,7 @@ services:
       dockerfile: docker/isynkgr/Dockerfile
     depends_on:
       - ollama-init
-    command: ["python", "scripts/gen_samples.py"]
+    command: ["scripts/gen_samples.sh"]
     volumes:
       - ./data:/app/data
       - ./output:/app/output
@@ -37,7 +37,7 @@ services:
       dockerfile: docker/isynkgr/Dockerfile
     depends_on:
       - ollama-init
-    command: ["python", "scripts/run_bench.py", "--max-samples", "20"]
+    command: ["scripts/run_bench.sh", "--max-samples", "20"]
     volumes:
       - ./data:/app/data
       - ./output:/app/output
