@@ -38,7 +38,7 @@ def run_benchmark(compose_file: str = "docker/compose/docker-compose.bench.yml",
             r.pop("violation_counts", None)
             w.writerow(r)
     (run_dir / "metrics.json").write_text(json.dumps(rows, indent=2))
-    write_report(run_dir, {r["baseline"]: r.get("f1", 0.0) for r in rows})
+    write_report(run_dir, rows)
     return run_dir
 
 
