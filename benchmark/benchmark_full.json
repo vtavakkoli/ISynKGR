@@ -1,0 +1,23 @@
+{
+  "seed": 42,
+  "run_id_prefix": "run",
+  "standards": ["IEEE1451", "ISO15926", "IEC61499", "OPCUA", "AAS"],
+  "pairs": [
+    ["IEEE1451", "AAS"],
+    ["ISO15926", "AAS"],
+    ["IEC61499", "AAS"],
+    ["OPCUA", "AAS"],
+    ["AAS", "OPCUA"]
+  ],
+  "default_samples_per_standard": 500,
+  "fast_samples_per_standard": 30,
+  "tiers": ["canonical", "noisy", "realistic"],
+  "variants": [
+    {"name": "full_framework", "graph_rag": true, "parallel_retrieval": true, "community_detection": true, "reasoning_steps": true},
+    {"name": "baseline", "graph_rag": false, "parallel_retrieval": false, "community_detection": false, "reasoning_steps": false},
+    {"name": "ablation_no_graphrag", "graph_rag": false, "parallel_retrieval": true, "community_detection": true, "reasoning_steps": true},
+    {"name": "ablation_no_parallel", "graph_rag": true, "parallel_retrieval": false, "community_detection": true, "reasoning_steps": true},
+    {"name": "ablation_no_community", "graph_rag": true, "parallel_retrieval": true, "community_detection": false, "reasoning_steps": true},
+    {"name": "ablation_no_reasoning", "graph_rag": true, "parallel_retrieval": true, "community_detection": true, "reasoning_steps": false}
+  ]
+}
