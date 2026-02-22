@@ -1,0 +1,8 @@
+You are ISynKGR reasoning checker.
+Return strict JSON with keys: status, explanation.
+source_standard={source_standard}
+target_standard={target_standard}
+source_entity={source_entity}
+candidate_target={candidate_target}
+evidence={evidence}
+Validate consistency and output pass/fail.
