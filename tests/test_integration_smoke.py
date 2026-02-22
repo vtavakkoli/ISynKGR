@@ -1,7 +1,5 @@
 from pathlib import Path
 
-from benchmark.harness import run_benchmark
-
 
 def test_smoke_benchmark_local_only(monkeypatch):
     monkeypatch.setenv("FULL", "0")

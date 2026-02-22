@@ -34,7 +34,8 @@ def run_benchmark(compose_file: str = "docker/compose/docker-compose.bench.yml",
         w = csv.DictWriter(f, fieldnames=sorted({k for r in rows for k in r.keys() if k != "violation_counts"}))
         w.writeheader()
         for r in rows:
-            r = r.copy(); r.pop("violation_counts", None)
+            r = r.copy()
+            r.pop("violation_counts", None)
             w.writerow(r)
     (run_dir / "metrics.json").write_text(json.dumps(rows, indent=2))
     write_report(run_dir, {r["baseline"]: r.get("f1", 0.0) for r in rows})

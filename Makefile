@@ -7,7 +7,7 @@ lint:
 	ruff check isynkgr benchmark tests
 
 test:
-	pytest -q
+	PYTHONPATH=. pytest -q
 
 example-opcua-aas:
 	PYTHONPATH=. python examples/translate_opcua_to_aas.py

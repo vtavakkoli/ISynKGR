@@ -8,7 +8,7 @@ from typing import Literal
 from isynkgr.adapters.aas import AASAdapter
 from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.canonical.model import CanonicalModel
-from isynkgr.canonical.schemas import Mapping, Provenance, TranslationResult, ValidationReport
+from isynkgr.canonical.schemas import Mapping, Provenance, TranslationResult
 from isynkgr.llm.ollama import OllamaClient
 from isynkgr.retrieval.graphrag import GraphRAGRetriever
 from isynkgr.rules.engine import RuleEngine
