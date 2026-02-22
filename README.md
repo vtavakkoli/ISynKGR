@@ -40,3 +40,9 @@ Add a new adapter in `isynkgr/adapters/`, implement `parse/serialize/validate`, 
 
 ## Add a new baseline SUT
 Create Dockerfile under `docker/sut/<name>/`, add service in `docker/compose/docker-compose.bench.yml`, then include baseline in `benchmark/harness.py`.
+
+
+## Full-run dataset validation
+Before `docker-compose up --build full`, the `dataset_validate` container runs automatically to verify dataset sufficiency and generate missing data. Generated data is persisted in `datasets/` and reused in subsequent benchmark runs.
+
+Each benchmark suite writes progress logs (total/completed/remaining) in `results/<run_id>/logs/benchmark.log` (harness mode) and per-SUT `results/<suite>/progress.log` (compose quick/full mode).

@@ -1,4 +1,12 @@
 services:
+  dataset_validate:
+    build:
+      context: .
+      dockerfile: docker/sut/rule_only/Dockerfile
+    command: ["python", "-m", "benchmark.validate_dataset"]
+    volumes:
+      - ./datasets:/app/datasets
+
   quick:
     build:
       context: .
@@ -27,6 +35,9 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      dataset_validate:
+        condition: service_completed_successfully
     volumes:
       - ./datasets/v1:/data
       - ./results:/out
@@ -45,6 +56,9 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      dataset_validate:
+        condition: service_completed_successfully
     volumes:
       - ./datasets/v1:/data
       - ./results:/out
@@ -63,6 +77,9 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      dataset_validate:
+        condition: service_completed_successfully
     volumes:
       - ./datasets/v1:/data
       - ./results:/out
@@ -78,6 +95,9 @@ services:
       OUTPUT_DIR: /out/rule_only
       CONFIG_PATH: /config/config.json
       SUT_MODE: rule_only
+    depends_on:
+      dataset_validate:
+        condition: service_completed_successfully
     volumes:
       - ./datasets/v1:/data
       - ./results:/out
@@ -93,6 +113,9 @@ services:
       OUTPUT_DIR: /out/graph_only
       CONFIG_PATH: /config/config.json
       SUT_MODE: graph_only
+    depends_on:
+      dataset_validate:
+        condition: service_completed_successfully
     volumes:
       - ./datasets/v1:/data
       - ./results:/out
@@ -102,6 +125,8 @@ services:
     image: alpine:3.20
     command: ["sh", "-c", "echo Full benchmark services completed"]
     depends_on:
+      dataset_validate:
+        condition: service_completed_successfully
       isynkgr_hybrid:
         condition: service_completed_successfully
       llm_only:
