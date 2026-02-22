@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "isynkgr"
 version = "0.1.0"
-description = "Industrial Semantic Knowledge Graph Reasoner benchmark framework"
+description = "Industrial Semantic Knowledge Graph Reasoner framework"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
