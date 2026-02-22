@@ -17,6 +17,7 @@ services:
       OUTPUT_DIR: /out/quick
       CONFIG_PATH: /config/config.json
       SUT_MODE: rule_only
+      MAX_SAMPLES: ${MAX_SAMPLES:-100}
     volumes:
       - ./datasets/v1:/data
       - ./results:/out
@@ -32,6 +33,7 @@ services:
       OUTPUT_DIR: /out/isynkgr_hybrid
       CONFIG_PATH: /config/config.json
       SUT_MODE: isynkgr_hybrid
+      MAX_SAMPLES: ${MAX_SAMPLES:-100}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -53,6 +55,7 @@ services:
       OUTPUT_DIR: /out/llm_only
       CONFIG_PATH: /config/config.json
       SUT_MODE: llm_only
+      MAX_SAMPLES: ${MAX_SAMPLES:-100}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -74,6 +77,7 @@ services:
       OUTPUT_DIR: /out/rag_only
       CONFIG_PATH: /config/config.json
       SUT_MODE: rag_only
+      MAX_SAMPLES: ${MAX_SAMPLES:-100}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -95,6 +99,7 @@ services:
       OUTPUT_DIR: /out/rule_only
       CONFIG_PATH: /config/config.json
       SUT_MODE: rule_only
+      MAX_SAMPLES: ${MAX_SAMPLES:-100}
     depends_on:
       dataset_validate:
         condition: service_completed_successfully
@@ -113,6 +118,7 @@ services:
       OUTPUT_DIR: /out/graph_only
       CONFIG_PATH: /config/config.json
       SUT_MODE: graph_only
+      MAX_SAMPLES: ${MAX_SAMPLES:-100}
     depends_on:
       dataset_validate:
         condition: service_completed_successfully
