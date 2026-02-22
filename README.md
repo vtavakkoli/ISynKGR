@@ -1,46 +1,58 @@
 # ISynKGR (Industrial Semantic Knowledge Graph Reasoner)
 
-ISynKGR is a reproducible, Dockerized benchmarking framework for industrial semantic translation across IEEE 1451, ISO 15926, IEC 61499, OPC UA (IEC 62541), and AAS (IEC 63278).
+ISynKGR is a reproducible, Dockerized framework for industrial semantic translation + benchmarking across IEEE 1451, ISO 15926, IEC 61499, OPC UA (IEC 62541), and AAS (IEC 63278).
 
-## Project layout
+## Compact project layout
 
-The repository is intentionally compact and centered on one installable Python package:
-
-- `isynkgr/` → framework source code (LLM adapter, retrieval, data generation, benchmark harness)
-- `scripts/` → compatibility wrappers for direct script execution
+- `isynkgr/` → installable framework package (LLM adapter, retrieval, data generation, translation logic, benchmark runner)
+- `tests/` → unit/integration tests
+- `benchmarks/` → benchmark entrypoint and standard config
+- `prompts/` → versioned deterministic prompts (`prompts/v1/...`)
+- `scripts/` → compatibility wrappers (`.py`, `.ps1`, `.cmd`, `.sh`)
 - `docker/` + `docker-compose.yml` → container runtime
-- `prompts/` → versioned deterministic prompts
-- `data/demo_sources/` → minimal in-repo source snapshots
+- `data/demo_sources/` → minimal source snapshots
+- `output/` + `cache/` → generated benchmark output + file-based LLM cache (gitignored)
 
 ## Install with pip
 
-You can install ISynKGR as a standard Python package from the repository root:
+From repository root:
 
 ```bash
 pip install .
 ```
 
-Available CLI commands after installation:
+CLI commands:
 
 - `isynkgr-gen-samples`
 - `isynkgr-run-bench`
 
-## Architecture
+## Reproducibility controls
 
-```mermaid
-flowchart LR
-  A[Sample Generator] --> B[KG + GraphRAG Retrieval]
-  B --> C[Ollama Qwen3 0.6B]
-  C --> D[Translation Logic Library]
-  D --> E[Benchmark Harness]
-  E --> F[Metrics + Plots]
+- Fixed global seed (`145162578`)
+- Deterministic prompt template (`prompts/v1/reasoning_check.txt`)
+- File-based LLM cache (`cache/llm`)
+- Pinned lock file (`requirements.lock`)
+- Deterministic `output/benchmarks/latest` refresh
+
+## Benchmark progress logging
+
+`isynkgr-run-bench` prints timestamped progress messages for:
+
+- run start and finish
+- each source→target system pair
+- each benchmark method per pair
+- periodic sample counters
+- per-system completion status
+
+Example:
+
+```text
+[2026-02-22 09:59:06 UTC] [PAIR] (3/20) Starting ieee1451 -> opcua62541
+[2026-02-22 09:59:06 UTC] [METHOD] [ieee1451 -> opcua62541] (1/5) Running method 'isynkgr' on 20 samples
+[2026-02-22 09:59:06 UTC] [STATUS] Per-system progress: ieee1451:3/4, iso15926:0/4, iec61499:0/4, opcua62541:0/4, aas63278:0/4
 ```
 
-## Quickstart (Docker + system Ollama)
-
-1. Install and start Ollama on the host system.
-2. Pull the model once on host: `ollama pull qwen3:0.6b`
-3. Run:
+## Run with Docker Compose
 
 ```bash
 make up
@@ -49,9 +61,9 @@ make bench
 make down
 ```
 
-## Windows support
+Containers call the packaged CLI commands and connect to host Ollama via `OLLAMA_BASE_URL` (default `http://host.docker.internal:11434`).
 
-You can run directly with Docker Compose on Windows (PowerShell/CMD):
+## Windows
 
 ```powershell
 ollama serve
@@ -59,36 +71,4 @@ ollama pull qwen3:0.6b
 docker compose run --rm isynkgr-gen-samples
 docker compose run --rm isynkgr-bench
 docker compose down -v
-```
-
-Optional helper scripts:
-- PowerShell: `scripts/gen_samples.ps1`, `scripts/run_bench.ps1`
-- CMD: `scripts/gen_samples.cmd`, `scripts/run_bench.cmd`
-
-## Reproducibility controls
-
-- Fixed global seed (`145162578`)
-- Fixed prompt template in `prompts/v1/`
-- File-based LLM cache in `cache/llm`
-- Pinned dependency lock (`requirements.lock`)
-- Deterministic output refresh to `output/benchmarks/latest` (directory copy, no symlink)
-
-## Benchmark progress logging
-
-`isynkgr-run-bench` now prints timestamped progress logs for:
-
-- overall run start/end
-- per source-target system pair progress
-- per-method progress
-- periodic sample counters inside each method
-
-This makes long benchmark runs easy to monitor in real time.
-
-## Ollama connection
-
-Containers connect to host Ollama via `OLLAMA_BASE_URL` (default: `http://host.docker.internal:11434`).
-Override if needed:
-
-```bash
-OLLAMA_BASE_URL=http://localhost:11434 docker compose run --rm isynkgr-bench
 ```

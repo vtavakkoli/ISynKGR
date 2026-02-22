@@ -8,7 +8,7 @@ import statistics
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 try:
     import matplotlib.pyplot as plt
@@ -25,6 +25,22 @@ def log_progress(stage: str, message: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     print(f"[{ts}] [{stage}] {message}", flush=True)
 
+
+
+
+def load_standards(config_path: Path | None) -> list[str]:
+    if config_path is None:
+        return list(STANDARDS.keys())
+    data = json.loads(config_path.read_text())
+    standards = data.get("standards", [])
+    if not standards:
+        raise ValueError(f"No standards found in config: {config_path}")
+    return list(standards)
+
+
+def build_pairs(standards: Iterable[str]) -> list[tuple[str, str]]:
+    standards = list(standards)
+    return [(source, target) for source in standards for target in standards if source != target]
 
 def build_graph(sample: dict[str, Any]) -> dict[str, Any]:
     entity = sample["entities"][0]["id"]
@@ -59,6 +75,7 @@ def run_pair(
     client: OllamaClient | None,
     pair_index: int,
     pair_total: int,
+    system_status: dict[str, int],
 ) -> list[dict[str, Any]]:
     pair_name = f"{source} -> {target}"
     log_progress("PAIR", f"({pair_index}/{pair_total}) Starting {pair_name}")
@@ -140,7 +157,9 @@ def run_pair(
         )
         log_progress("METHOD", f"[{pair_name}] Finished '{method}' in {elapsed:.2f}s")
 
+    system_status[source] += 1
     log_progress("PAIR", f"({pair_index}/{pair_total}) Completed {pair_name}")
+    log_progress("STATUS", f"Per-system progress: " + ", ".join(f"{k}:{v}/{len(system_status)-1}" for k, v in system_status.items()))
     return results
 
 
@@ -199,18 +218,21 @@ def main() -> None:
     p.add_argument("--no-cot", action="store_true")
     p.add_argument("--no-community", action="store_true")
     p.add_argument("--no-parallel-retrievers", action="store_true")
+    p.add_argument("--config", type=Path, default=Path("benchmarks/configs/standards.json"))
     args = p.parse_args()
 
     use_llm = os.getenv("ISYNKGR_SKIP_LLM", "0") != "1"
     client = OllamaClient(model=args.model) if use_llm else None
 
-    standards = list(STANDARDS.keys())
-    pair_tasks = [(source, target) for source in standards for target in standards if source != target]
+    config_path = args.config if args.config.exists() else None
+    standards = load_standards(config_path)
+    pair_tasks = build_pairs(standards)
+    system_status = {s: 0 for s in standards}
     log_progress("RUN", f"Starting benchmark run with {len(pair_tasks)} source-target systems and max_samples={args.max_samples}")
 
     all_rows: list[dict[str, Any]] = []
     for idx, (source, target) in enumerate(pair_tasks, start=1):
-        all_rows.extend(run_pair(source, target, args, client, idx, len(pair_tasks)))
+        all_rows.extend(run_pair(source, target, args, client, idx, len(pair_tasks), system_status))
 
     out = save_outputs(all_rows, Path("output/benchmarks"))
     log_progress("RUN", f"Benchmark outputs written to {out}")
