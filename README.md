@@ -45,7 +45,7 @@ Create Dockerfile under `docker/sut/<name>/`, add service in `docker/compose/doc
 ## Full-run dataset validation
 Before `docker-compose up --build full`, the `dataset_validate` container runs automatically to verify dataset sufficiency and generate missing data. Generated data is persisted in `datasets/` and reused in subsequent benchmark runs.
 
-Each benchmark suite writes progress logs (total/completed/remaining) in `results/<run_id>/logs/benchmark.log` (harness mode) and per-SUT `results/<suite>/progress.log` (compose quick/full mode).
+Each benchmark suite writes progress logs (total/completed/remaining) in `results/<run_id>/logs/benchmark.log` (harness mode) and per-SUT `results/<suite>/progress.log` (compose quick/full mode). Per-SUT logs now include explicit stage markers (`init`, `translation`, `persist`, `complete`), elapsed time, ETA, and throughput so you can see what is running, what remains, and approximate completion time while `docker-compose up --build full` is in progress.
 
 
 ## Benchmarking

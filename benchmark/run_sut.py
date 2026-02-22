@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 from isynkgr.pipeline.hybrid import TranslatorConfig
 from isynkgr.translator import Translator
+
+
+def _fmt_s(seconds: float) -> str:
+    return f"{seconds:.2f}s"
 
 
 def main() -> None:
@@ -22,9 +27,12 @@ def main() -> None:
         with progress_log.open("a") as fp:
             fp.write(msg + "\n")
 
+    suite_start = time.perf_counter()
+    log(f"[STAGE] mode={mode} stage=init status=start output_dir={output_dir}")
     cfg_data = json.loads(config_path.read_text()) if config_path.exists() else {}
     cfg = TranslatorConfig(model_name=cfg_data.get("model_name", "qwen3:0.6b"), seed=cfg_data.get("seed", 42))
     translator = Translator(cfg)
+    log(f"[STAGE] mode={mode} stage=init status=done model={cfg.model_name} seed={cfg.seed}")
 
     mapping_lines = []
     validations = []
@@ -32,11 +40,19 @@ def main() -> None:
     max_samples = int(os.getenv("MAX_SAMPLES", "100"))
     opc_files = sorted((dataset_dir.parent / "opcua" / "synthetic").glob("*.xml"))[:max_samples]
     total = len(opc_files)
-    log(f"[SUITE] mode={mode} total={total} completed=0 remaining={total}")
+    log(f"[SUITE] mode={mode} stage=translation total={total} completed=0 remaining={total} eta=unknown")
+
     for idx, f in enumerate(opc_files, start=1):
+        sample_start = time.perf_counter()
         completed = idx - 1
         remaining = total - completed
-        log(f"[RUN] mode={mode} sample={f.name} total={total} completed={completed} remaining={remaining}")
+        elapsed = time.perf_counter() - suite_start
+        avg = (elapsed / completed) if completed else 0.0
+        eta = avg * remaining if completed else 0.0
+        log(
+            f"[RUN] mode={mode} stage=translation sample={f.name} total={total} "
+            f"completed={completed} remaining={remaining} elapsed={_fmt_s(elapsed)} eta={_fmt_s(eta)}"
+        )
 
         i = int(f.stem.split("_")[-1])
         result = translator.translate("opcua", "aas", str(f), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
@@ -63,13 +79,29 @@ def main() -> None:
 
         completed = idx
         remaining = total - completed
-        log(f"[DONE] mode={mode} sample={f.name} total={total} completed={completed} remaining={remaining}")
+        sample_elapsed = time.perf_counter() - sample_start
+        elapsed = time.perf_counter() - suite_start
+        avg = elapsed / completed if completed else 0.0
+        eta = avg * remaining
+        log(
+            f"[DONE] mode={mode} stage=translation sample={f.name} total={total} "
+            f"completed={completed} remaining={remaining} sample_elapsed={_fmt_s(sample_elapsed)} "
+            f"elapsed={_fmt_s(elapsed)} eta={_fmt_s(eta)}"
+        )
 
+    log(f"[STAGE] mode={mode} stage=persist status=start")
     (output_dir / "mappings.jsonl").write_text("\n".join(mapping_lines) + ("\n" if mapping_lines else ""))
     (output_dir / "validation.json").write_text(json.dumps(validations, indent=2))
     (output_dir / "provenance.json").write_text(json.dumps({"mode": mode, "dataset": str(dataset_dir), "llm_bug_count": len(llm_bugs)}, indent=2))
     (output_dir / "bugs.json").write_text(json.dumps(llm_bugs, indent=2))
-    log(f"[SUITE-END] mode={mode} total={total} completed={total} remaining=0")
+    log(f"[STAGE] mode={mode} stage=persist status=done files=4")
+
+    suite_elapsed = time.perf_counter() - suite_start
+    throughput = (total / suite_elapsed) if suite_elapsed > 0 else 0.0
+    log(
+        f"[SUITE-END] mode={mode} stage=complete total={total} completed={total} remaining=0 "
+        f"elapsed={_fmt_s(suite_elapsed)} throughput={throughput:.2f}/s bugs={len(llm_bugs)}"
+    )
 
 
 if __name__ == "__main__":
