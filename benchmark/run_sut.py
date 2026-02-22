@@ -23,7 +23,7 @@ def main() -> None:
             fp.write(msg + "\n")
 
     cfg_data = json.loads(config_path.read_text()) if config_path.exists() else {}
-    cfg = TranslatorConfig(model_name=cfg_data.get("model_name", "Qwen/Qwen3-0.6B"), seed=cfg_data.get("seed", 42))
+    cfg = TranslatorConfig(model_name=cfg_data.get("model_name", "qwen3:0.6b"), seed=cfg_data.get("seed", 42))
     translator = Translator(cfg)
 
     mapping_lines = []

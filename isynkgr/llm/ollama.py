@@ -10,7 +10,7 @@ from isynkgr.utils.hashing import stable_hash
 
 
 class OllamaClient:
-    def __init__(self, model: str = "Qwen/Qwen3-0.6B", base_url: str | None = None, cache: JsonCache | None = None) -> None:
+    def __init__(self, model: str = "qwen3:0.6b", base_url: str | None = None, cache: JsonCache | None = None) -> None:
         self.model = model
         self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")).rstrip("/")
         self.cache = cache or JsonCache()

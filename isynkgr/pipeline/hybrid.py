@@ -18,7 +18,7 @@ Mode = Literal["hybrid", "llm_only", "rag_only", "rule_only", "graph_only"]
 
 
 class TranslatorConfig:
-    def __init__(self, model_name: str = "Qwen/Qwen3-0.6B", seed: int = 42, max_repair_iterations: int = 2, enable_vector_retrieval: bool = False) -> None:
+    def __init__(self, model_name: str = "qwen3:0.6b", seed: int = 42, max_repair_iterations: int = 2, enable_vector_retrieval: bool = False) -> None:
         self.model_name = model_name
         self.seed = seed
         self.max_repair_iterations = max_repair_iterations
