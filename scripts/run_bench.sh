@@ -1,3 +1,3 @@
-#!/usr/bin/env bash
-set -euo pipefail
-python -m src.evaluation.benchmark_runner "$@"
+#!/bin/sh
+set -eu
+python scripts/run_bench.py "$@"

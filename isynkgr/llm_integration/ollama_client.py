@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,12 +15,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class OllamaClient:
-    base_url: str = "http://ollama:11434"
+    base_url: str = "http://localhost:11434"
     model: str = "qwen3:0.6b"
     cache_dir: Path = Path("cache/llm")
     timeout_s: int = 120
 
     def __post_init__(self) -> None:
+        self.base_url = os.getenv("OLLAMA_BASE_URL", self.base_url)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _cache_key(self, prompt: str, context: dict[str, Any] | None = None) -> Path:
