@@ -4,13 +4,26 @@ ISynKGR is a reproducible, Dockerized benchmarking framework for industrial sema
 
 ## Project layout
 
-The framework is isolated in its own package folder:
+The repository is intentionally compact and centered on one installable Python package:
 
-- `isynkgr/` → core framework code (LLM adapter, retrieval, data generation, benchmark harness)
+- `isynkgr/` → framework source code (LLM adapter, retrieval, data generation, benchmark harness)
+- `scripts/` → compatibility wrappers for direct script execution
 - `docker/` + `docker-compose.yml` → container runtime
 - `prompts/` → versioned deterministic prompts
 - `data/demo_sources/` → minimal in-repo source snapshots
-- `scripts/` → cross-platform entrypoints (`.py`, `.ps1`, `.cmd`)
+
+## Install with pip
+
+You can install ISynKGR as a standard Python package from the repository root:
+
+```bash
+pip install .
+```
+
+Available CLI commands after installation:
+
+- `isynkgr-gen-samples`
+- `isynkgr-run-bench`
 
 ## Architecture
 
@@ -60,6 +73,16 @@ Optional helper scripts:
 - Pinned dependency lock (`requirements.lock`)
 - Deterministic output refresh to `output/benchmarks/latest` (directory copy, no symlink)
 
+## Benchmark progress logging
+
+`isynkgr-run-bench` now prints timestamped progress logs for:
+
+- overall run start/end
+- per source-target system pair progress
+- per-method progress
+- periodic sample counters inside each method
+
+This makes long benchmark runs easy to monitor in real time.
 
 ## Ollama connection
 

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/isynkgr/Dockerfile
-    command: ["python", "scripts/gen_samples.py"]
+    command: ["isynkgr-gen-samples"]
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
@@ -17,7 +17,7 @@ services:
     build:
       context: .
       dockerfile: docker/isynkgr/Dockerfile
-    command: ["python", "scripts/run_bench.py", "--max-samples", "20"]
+    command: ["isynkgr-run-bench", "--max-samples", "20"]
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
