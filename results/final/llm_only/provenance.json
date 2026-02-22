@@ -1,0 +1,4 @@
+{
+  "mode": "llm_only",
+  "runner": "local-final-report"
+}

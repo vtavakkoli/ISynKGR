@@ -1,0 +1,42 @@
+[
+  {
+    "precision": 1.0,
+    "recall": 0.1,
+    "f1": 0.18181818181818182,
+    "validity_pass_rate": 1.0,
+    "violation_counts": {},
+    "baseline": "rule_only"
+  },
+  {
+    "precision": 1.0,
+    "recall": 0.1,
+    "f1": 0.18181818181818182,
+    "validity_pass_rate": 1.0,
+    "violation_counts": {},
+    "baseline": "graph_only"
+  },
+  {
+    "precision": 1.0,
+    "recall": 0.1,
+    "f1": 0.18181818181818182,
+    "validity_pass_rate": 1.0,
+    "violation_counts": {},
+    "baseline": "isynkgr_hybrid"
+  },
+  {
+    "precision": 1.0,
+    "recall": 0.1,
+    "f1": 0.18181818181818182,
+    "validity_pass_rate": 1.0,
+    "violation_counts": {},
+    "baseline": "rag_only"
+  },
+  {
+    "precision": 1.0,
+    "recall": 0.1,
+    "f1": 0.18181818181818182,
+    "validity_pass_rate": 1.0,
+    "violation_counts": {},
+    "baseline": "llm_only"
+  }
+]

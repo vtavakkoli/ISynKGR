@@ -1,0 +1,92 @@
+<html><body style="font-family:Arial,sans-serif;margin:24px">
+<h1>ISynKGR Benchmark Report</h1>
+<h2>Summary Table</h2>
+<pre>|baseline|precision|recall|f1|validity_pass_rate|
+|---|---|---|---|---|
+|rule_only|1.000|0.100|0.182|1.000|
+|graph_only|1.000|0.100|0.182|1.000|
+|isynkgr_hybrid|1.000|0.100|0.182|1.000|
+|rag_only|1.000|0.100|0.182|1.000|
+|llm_only|1.000|0.100|0.182|1.000|</pre>
+<h2>Plots</h2>
+<svg width="800" height="200" xmlns="http://www.w3.org/2000/svg">
+<text x="10" y="24" font-size="18" font-family="Arial">F1 by Baseline</text>
+<text x="10" y="64" font-size="12" font-family="Arial">rule_only</text>
+<rect x="180" y="50" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="63" font-size="12" font-family="Arial">0.182</text>
+<text x="10" y="92" font-size="12" font-family="Arial">graph_only</text>
+<rect x="180" y="78" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="91" font-size="12" font-family="Arial">0.182</text>
+<text x="10" y="120" font-size="12" font-family="Arial">isynkgr_hybrid</text>
+<rect x="180" y="106" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="119" font-size="12" font-family="Arial">0.182</text>
+<text x="10" y="148" font-size="12" font-family="Arial">rag_only</text>
+<rect x="180" y="134" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="147" font-size="12" font-family="Arial">0.182</text>
+<text x="10" y="176" font-size="12" font-family="Arial">llm_only</text>
+<rect x="180" y="162" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="175" font-size="12" font-family="Arial">0.182</text>
+</svg>
+<svg width="800" height="200" xmlns="http://www.w3.org/2000/svg">
+<text x="10" y="24" font-size="18" font-family="Arial">Validity Pass Rate by Baseline</text>
+<text x="10" y="64" font-size="12" font-family="Arial">rule_only</text>
+<rect x="180" y="50" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="63" font-size="12" font-family="Arial">1.000</text>
+<text x="10" y="92" font-size="12" font-family="Arial">graph_only</text>
+<rect x="180" y="78" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="91" font-size="12" font-family="Arial">1.000</text>
+<text x="10" y="120" font-size="12" font-family="Arial">isynkgr_hybrid</text>
+<rect x="180" y="106" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="119" font-size="12" font-family="Arial">1.000</text>
+<text x="10" y="148" font-size="12" font-family="Arial">rag_only</text>
+<rect x="180" y="134" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="147" font-size="12" font-family="Arial">1.000</text>
+<text x="10" y="176" font-size="12" font-family="Arial">llm_only</text>
+<rect x="180" y="162" width="600" height="16" fill="#4e79a7" />
+<text x="786" y="175" font-size="12" font-family="Arial">1.000</text>
+</svg>
+
+<h2>Raw JSON</h2>
+<pre>[
+  {
+    &quot;precision&quot;: 1.0,
+    &quot;recall&quot;: 0.1,
+    &quot;f1&quot;: 0.18181818181818182,
+    &quot;validity_pass_rate&quot;: 1.0,
+    &quot;violation_counts&quot;: {},
+    &quot;baseline&quot;: &quot;rule_only&quot;
+  },
+  {
+    &quot;precision&quot;: 1.0,
+    &quot;recall&quot;: 0.1,
+    &quot;f1&quot;: 0.18181818181818182,
+    &quot;validity_pass_rate&quot;: 1.0,
+    &quot;violation_counts&quot;: {},
+    &quot;baseline&quot;: &quot;graph_only&quot;
+  },
+  {
+    &quot;precision&quot;: 1.0,
+    &quot;recall&quot;: 0.1,
+    &quot;f1&quot;: 0.18181818181818182,
+    &quot;validity_pass_rate&quot;: 1.0,
+    &quot;violation_counts&quot;: {},
+    &quot;baseline&quot;: &quot;isynkgr_hybrid&quot;
+  },
+  {
+    &quot;precision&quot;: 1.0,
+    &quot;recall&quot;: 0.1,
+    &quot;f1&quot;: 0.18181818181818182,
+    &quot;validity_pass_rate&quot;: 1.0,
+    &quot;violation_counts&quot;: {},
+    &quot;baseline&quot;: &quot;rag_only&quot;
+  },
+  {
+    &quot;precision&quot;: 1.0,
+    &quot;recall&quot;: 0.1,
+    &quot;f1&quot;: 0.18181818181818182,
+    &quot;validity_pass_rate&quot;: 1.0,
+    &quot;violation_counts&quot;: {},
+    &quot;baseline&quot;: &quot;llm_only&quot;
+  }
+]</pre>
+</body></html>

@@ -1,4 +1,4 @@
-.PHONY: install lint test example-opcua-aas example-aas-opcua benchmark-small benchmark-full reproduce docker-quick docker-full
+.PHONY: install lint test example-opcua-aas example-aas-opcua benchmark-small benchmark-full reproduce docker-quick docker-full final-report
 
 install:
 	pip install --no-build-isolation -e .
@@ -30,3 +30,7 @@ docker-quick:
 
 docker-full:
 	docker-compose up --build full
+
+
+final-report:
+	PYTHONPATH=. python -m benchmark.final_report
