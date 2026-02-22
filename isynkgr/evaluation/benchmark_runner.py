@@ -159,7 +159,7 @@ def run_pair(
 
     system_status[source] += 1
     log_progress("PAIR", f"({pair_index}/{pair_total}) Completed {pair_name}")
-    log_progress("STATUS", f"Per-system progress: " + ", ".join(f"{k}:{v}/{len(system_status)-1}" for k, v in system_status.items()))
+    log_progress("STATUS", "Per-system progress: " + ", ".join(f"{k}:{v}/{len(system_status)-1}" for k, v in system_status.items()))
     return results
 
 
