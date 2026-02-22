@@ -8,10 +8,8 @@ RUN groupadd --system appuser \
 
 WORKDIR /app
 
-COPY requirements.lock /tmp/requirements.lock
-RUN pip install --no-cache-dir -r /tmp/requirements.lock
-
 COPY . /app
-RUN chown -R appuser:appuser /app
+RUN pip install --no-cache-dir . \
+    && chown -R appuser:appuser /app
 
 USER appuser
