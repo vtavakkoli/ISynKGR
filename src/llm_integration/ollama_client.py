@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib import request
 
-from isynkgr.common import stable_hash
+from src.common import stable_hash
 
 logger = logging.getLogger(__name__)
 
