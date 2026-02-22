@@ -29,7 +29,8 @@ def main() -> None:
     mapping_lines = []
     validations = []
     llm_bugs = []
-    opc_files = sorted((dataset_dir.parent / "opcua" / "synthetic").glob("*.xml"))[:3]
+    max_samples = int(os.getenv("MAX_SAMPLES", "100"))
+    opc_files = sorted((dataset_dir.parent / "opcua" / "synthetic").glob("*.xml"))[:max_samples]
     total = len(opc_files)
     log(f"[SUITE] mode={mode} total={total} completed=0 remaining={total}")
     for idx, f in enumerate(opc_files, start=1):
