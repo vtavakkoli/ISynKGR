@@ -1,6 +1,4 @@
 import json
-from pathlib import Path
-
 from benchmark.full_workflow import run_full_workflow
 
 
