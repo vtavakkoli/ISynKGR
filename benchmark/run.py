@@ -26,7 +26,7 @@ SCENARIO_MODE = {
 def normalize_ollama_host(raw_host: str) -> str:
     value = (raw_host or "").strip()
     if not value:
-        return "http://host.docker.internal:11434"
+        value = "http://host.docker.internal:11434"
 
     if "://" not in value:
         value = f"http://{value}"
@@ -35,30 +35,59 @@ def normalize_ollama_host(raw_host: str) -> str:
     host = parsed.hostname or "host.docker.internal"
     port = parsed.port or 11434
 
-    # 0.0.0.0 is a bind address; for clients use a routable host.
+    # 0.0.0.0 is a bind address; clients must use an actual reachable host.
     if host == "0.0.0.0":
-        host = "localhost"
+        host = os.getenv("OLLAMA_HOST_IP", "host.docker.internal")
 
     return f"{parsed.scheme or 'http'}://{host}:{port}"
 
 
+def _candidate_ollama_hosts(base_url: str) -> list[str]:
+    primary = normalize_ollama_host(base_url)
+    parsed = urlparse(primary)
+    scheme = parsed.scheme or "http"
+    host = parsed.hostname or "host.docker.internal"
+    port = parsed.port or 11434
+
+    candidates: list[str] = [f"{scheme}://{host}:{port}"]
+
+    host_ip = (os.getenv("OLLAMA_HOST_IP") or "").strip()
+    if host_ip:
+        candidates.append(f"{scheme}://{host_ip}:{port}")
+
+    # If local hostnames were provided, prefer host-routable Docker host aliases.
+    if host in {"localhost", "127.0.0.1"}:
+        candidates.append(f"{scheme}://host.docker.internal:{port}")
+        if host_ip:
+            candidates.append(f"{scheme}://{host_ip}:{port}")
+
+    # De-duplicate while preserving order.
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in candidates:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
 
 
 def wait_for_ollama(base_url: str, timeout_s: int = 90) -> str:
-    normalized = normalize_ollama_host(base_url)
-    print(f"Waiting for Ollama at {normalized} ...", flush=True)
+    candidates = _candidate_ollama_hosts(base_url)
+    print(f"Waiting for Ollama endpoints: {', '.join(candidates)} ...", flush=True)
     deadline = time.time() + timeout_s
-    url = normalized.rstrip("/") + "/api/tags"
+
     while time.time() < deadline:
-        try:
-            with request.urlopen(url, timeout=3) as resp:
-                if resp.status == 200:
-                    print("Ollama ready.", flush=True)
-                    return normalized
-        except Exception as exc:  # noqa: BLE001
-            print(f"... still waiting ({exc})", flush=True)
+        for endpoint in candidates:
+            url = endpoint.rstrip("/") + "/api/tags"
+            try:
+                with request.urlopen(url, timeout=3) as resp:
+                    if resp.status == 200:
+                        print(f"Ollama ready at {endpoint}.", flush=True)
+                        return endpoint
+            except Exception as exc:  # noqa: BLE001
+                print(f"... still waiting ({endpoint}: {exc})", flush=True)
         time.sleep(3)
-    raise RuntimeError(f"Timed out waiting for Ollama at {normalized}")
+    raise RuntimeError(f"Timed out waiting for Ollama. Tried: {', '.join(candidates)}")
 
 
 def _git_hash() -> str:
