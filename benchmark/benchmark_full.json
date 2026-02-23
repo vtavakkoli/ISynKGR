@@ -1,16 +1,9 @@
 {
   "seed": 42,
   "run_id_prefix": "run",
-  "standards": ["IEEE1451", "ISO15926", "IEC61499", "OPCUA", "AAS"],
-  "pairs": [
-    ["IEEE1451", "AAS"],
-    ["ISO15926", "AAS"],
-    ["IEC61499", "AAS"],
-    ["OPCUA", "AAS"],
-    ["AAS", "OPCUA"]
-  ],
-  "default_samples_per_standard": 500,
-  "fast_samples_per_standard": 30,
+  "standards": ["OPCUA", "AAS"],
+  "pairs": [["OPCUA", "AAS"]],
+  "items_per_standard": 100,
   "tiers": ["canonical", "noisy", "realistic"],
   "variants": [
     {"name": "full_framework", "graph_rag": true, "parallel_retrieval": true, "community_detection": true, "reasoning_steps": true},
