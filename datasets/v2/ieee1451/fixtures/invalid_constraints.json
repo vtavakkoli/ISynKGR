@@ -1,0 +1,21 @@
+{
+  "standard": "ieee1451",
+  "teds": [
+    {
+      "id": "ted-42",
+      "channels": [
+        {
+          "id": "ch-1",
+          "dtype": "FLOAT",
+          "unit": "degC"
+        },
+        {
+          "id": "ch-1",
+          "dtype": "STRING",
+          "unit": "status",
+          "range": {"min": 0, "max": 1}
+        }
+      ]
+    }
+  ]
+}

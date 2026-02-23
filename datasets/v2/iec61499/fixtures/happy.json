@@ -1,0 +1,40 @@
+{
+  "standard": "iec61499",
+  "devices": [
+    {
+      "id": "dev-main",
+      "name": "Main Device",
+      "resources": [
+        {
+          "id": "res-ctrl",
+          "name": "Control Resource",
+          "function_blocks": [
+            {
+              "id": "fb-temp",
+              "name": "Temperature Controller",
+              "type": "PID",
+              "inputs": [
+                {
+                  "id": "in-pv",
+                  "name": "Process Value",
+                  "dtype": "FLOAT",
+                  "unit": "degC",
+                  "range": {"min": -40.0, "max": 180.0}
+                }
+              ],
+              "outputs": [
+                {
+                  "id": "out-cv",
+                  "name": "Control Value",
+                  "dtype": "FLOAT",
+                  "unit": "%",
+                  "range": {"min": 0.0, "max": 100.0}
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
