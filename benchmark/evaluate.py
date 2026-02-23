@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from benchmark.metrics import prf1, violation_counts
+from isynkgr.icr.mapping_schema import ingest_mapping_payload, normalize_mapping_path
 
 
 def _load_jsonl_pairs(path: Path) -> tuple[list[dict], set[tuple[str, str]]]:
@@ -13,11 +14,10 @@ def _load_jsonl_pairs(path: Path) -> tuple[list[dict], set[tuple[str, str]]]:
         if not line.strip():
             continue
         row = json.loads(line)
-        rows.append(row)
-        src = row.get("source_id")
-        tgt = row.get("target_id")
-        if src and tgt:
-            pairs.add((str(src), str(tgt)))
+        record = ingest_mapping_payload(row, migrate_legacy=True)
+        canonical = record.model_dump()
+        rows.append(canonical)
+        pairs.add((normalize_mapping_path(record.source_path), normalize_mapping_path(record.target_path)))
     return rows, pairs
 
 

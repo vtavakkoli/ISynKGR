@@ -10,20 +10,22 @@ from isynkgr.common import STANDARDS, read_jsonl, write_jsonl
 def map_row(row: dict, source: str, target: str) -> dict:
     source_entity = row["entities"][0]["id"]
     target_entity = source_entity.replace(source, target)
-    property_map = {p["name"]: f"{p['name']}_{target}" for p in row["properties"]}
     return {
         "sample_id": row["sample_id"],
         "source_standard": source,
         "target_standard": target,
-        "source_entity": source_entity,
-        "target_entity": target_entity,
-        "property_mapping": property_map,
+        "source_path": source_entity,
+        "target_path": target_entity,
+        "mapping_type": "equivalent",
+        "transform": None,
         "confidence": 1.0,
+        "rationale": "Deterministic synthetic GT mapping.",
+        "evidence": ["generator:deterministic"],
     }
 
 
 def validate(gt_rows: list[dict]) -> None:
-    ids = {(r["sample_id"], r["source_standard"], r["target_standard"]) for r in gt_rows}
+    ids = {(r["sample_id"], r["source_standard"], r["target_standard"], r["source_path"], r["target_path"]) for r in gt_rows}
     if len(ids) != len(gt_rows):
         raise ValueError("Duplicate GT rows")
 

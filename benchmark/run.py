@@ -12,6 +12,7 @@ from urllib import request
 from urllib.parse import urlparse
 
 from benchmark.evaluate import evaluate_run
+from isynkgr.icr.mapping_schema import ingest_mapping_payload
 
 SCENARIO_MODE = {
     "baseline": "rule_only",
@@ -109,13 +110,13 @@ def run_scenario(args: argparse.Namespace) -> int:
     dataset_path = out_dir / "dataset.jsonl"
     gt_path = out_dir / "ground_truth.jsonl"
     gt_source = Path("datasets/v1/crosswalk/gt_mappings.jsonl")
-    gt_rows = [json.loads(line) for line in gt_source.read_text().splitlines() if line.strip()][:dataset_items]
+    gt_rows = [ingest_mapping_payload(json.loads(line), migrate_legacy=True).model_dump() for line in gt_source.read_text().splitlines() if line.strip()][:dataset_items]
     gt_path.write_text("\n".join(json.dumps(r) for r in gt_rows) + "\n")
     dataset_rows = [
         {
-            "id": row["source_id"],
-            "source_id": row["source_id"],
-            "target_id": row["target_id"],
+            "id": row["source_path"],
+            "mapping_source_path": row["source_path"],
+            "target_path": row["target_path"],
             "source_standard": "OPCUA",
             "target_standard": "AAS",
             "tier": args.tier,

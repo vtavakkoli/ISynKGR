@@ -10,6 +10,7 @@ from pathlib import Path
 
 from benchmark.evaluate import evaluate_run
 from benchmark.report import write_report
+from isynkgr.icr.mapping_schema import ingest_mapping_payload
 from benchmark.validate_dataset import validate_or_generate
 
 
@@ -53,12 +54,12 @@ def _copy_gt_and_dataset(artifacts_dir: Path) -> None:
     for line in gt_src.read_text().splitlines():
         if not line.strip():
             continue
-        rec = json.loads(line)
+        rec = ingest_mapping_payload(json.loads(line), migrate_legacy=True).model_dump()
         rows.append(
             {
-                "id": rec["source_id"],
-                "source_id": rec["source_id"],
-                "target_id": rec["target_id"],
+                "id": rec["source_path"],
+                "mapping_source_path": rec["source_path"],
+                "target_path": rec["target_path"],
                 "source_standard": "OPCUA",
                 "target_standard": "AAS",
                 "tier": "canonical",

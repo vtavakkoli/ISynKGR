@@ -9,6 +9,7 @@ from isynkgr.adapters.aas import AASAdapter
 from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.canonical.model import CanonicalModel
 from isynkgr.canonical.schemas import Mapping, Provenance, TranslationResult
+from isynkgr.icr.mapping_schema import ingest_mapping_payload
 from isynkgr.llm.ollama import OllamaClient
 from isynkgr.retrieval.graphrag import GraphRAGRetriever
 from isynkgr.rules.engine import RuleEngine
@@ -58,19 +59,19 @@ class HybridPipeline:
 
         llm_error = None
         if mode in {"hybrid", "llm_only", "rag_only"}:
-            prompt = f"Map nodes from {source_standard} to {target_standard}. Output JSON with mappings list, each with source_id,target_id,relation_type,confidence,evidence_ids. Source nodes:{[n.model_dump() for n in source_model.nodes[:50]]}. Evidence:{[e.model_dump() for e in evidence[:10]]}"
+            prompt = f"Map nodes from {source_standard} to {target_standard}. Output JSON with mappings list, each with source_path,target_path,mapping_type,transform,confidence,rationale,evidence. Source nodes:{[n.model_dump() for n in source_model.nodes[:50]]}. Evidence:{[e.model_dump() for e in evidence[:10]]}"
             raw = self.llm.complete_json(prompt, "MappingList", config.seed)
             llm_error = raw.get("_llm_error")
             for m in raw.get("mappings", []):
                 try:
-                    mappings.append(Mapping(**m))
+                    mappings.append(ingest_mapping_payload(m, migrate_legacy=True))
                 except Exception:
                     continue
 
         seen = set()
         dedup = []
         for m in sorted(mappings, key=lambda x: x.confidence, reverse=True):
-            k = (m.source_id, m.target_id, m.relation_type)
+            k = (m.source_path, m.target_path, str(m.mapping_type))
             if k not in seen:
                 dedup.append(m)
                 seen.add(k)
