@@ -6,22 +6,77 @@ from pathlib import Path
 from benchmark.metrics import prf1, violation_counts
 
 
-def evaluate_run(out_dir: Path) -> dict:
-    pred = set()
-    gold = set()
+def _load_jsonl_pairs(path: Path) -> tuple[list[dict], set[tuple[str, str]]]:
+    rows: list[dict] = []
+    pairs: set[tuple[str, str]] = set()
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        rows.append(row)
+        src = row.get("source_id")
+        tgt = row.get("target_id")
+        if src and tgt:
+            pairs.add((str(src), str(tgt)))
+    return rows, pairs
+
+
+def _resolve_gt_path(out_dir: Path) -> Path:
+    candidates = [
+        out_dir.parent / "ground_truth.jsonl",
+        out_dir.parent / "gt_mappings.jsonl",  # backward compatibility
+        out_dir.parent.parent / "ground_truth.jsonl",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    raise FileNotFoundError(
+        "Ground truth not found. Expected artifacts/<run_id>/ground_truth.jsonl "
+        "or artifacts/<run_id>/predictions/gt_mappings.jsonl"
+    )
+
+
+def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
+    pred_path = out_dir / "mappings.jsonl"
+    if not pred_path.exists():
+        raise FileNotFoundError(f"Predictions file missing: {pred_path}")
+    pred_rows, pred_pairs = _load_jsonl_pairs(pred_path)
+    if not pred_rows:
+        raise ValueError(f"Predictions file is empty: {pred_path}")
+
+    gt_path = _resolve_gt_path(out_dir)
+    gt_rows, gt_pairs = _load_jsonl_pairs(gt_path)
+    if not gt_rows:
+        raise ValueError(f"Ground truth file is empty: {gt_path}")
+
     reports = []
-    if (out_dir / "mappings.jsonl").exists():
-        for line in (out_dir / "mappings.jsonl").read_text().splitlines():
-            row = json.loads(line)
-            pred.add((row["source_id"], row["target_id"]))
-    gt = out_dir.parent / "gt_mappings.jsonl"
-    if gt.exists():
-        for line in gt.read_text().splitlines():
-            row = json.loads(line)
-            gold.add((row["source_id"], row["target_id"]))
-    if (out_dir / "validation.json").exists():
-        reports = json.loads((out_dir / "validation.json").read_text())
-    scores = prf1(pred, gold)
+    validation_path = out_dir / "validation.json"
+    if validation_path.exists():
+        reports = json.loads(validation_path.read_text())
+
+    matched_pairs = pred_pairs & gt_pairs
+    scores = prf1(pred_pairs, gt_pairs)
+    if len(pred_pairs) != len(gt_pairs):
+        scores["mismatch"] = {
+            "message": "Prediction and GT counts differ. Metrics computed on available sets; coverage reported.",
+            "gt_count": len(gt_pairs),
+            "pred_count": len(pred_pairs),
+        }
+
     scores["validity_pass_rate"] = sum(1 for r in reports if r.get("valid")) / len(reports) if reports else 0.0
     scores["violation_counts"] = violation_counts(reports)
+    scores["gt_count"] = len(gt_pairs)
+    scores["pred_count"] = len(pred_pairs)
+    scores["matched_count"] = len(matched_pairs)
+    scores["coverage"] = len(matched_pairs) / len(gt_pairs) if gt_pairs else 0.0
+    scores["dataset_count"] = len(gt_rows)
+    scores["evaluation_mode"] = evaluation_mode
+    scores["gt_path_used"] = str(gt_path)
+    scores["pred_path_used"] = str(pred_path)
+
+    print(
+        f"Evaluation summary | GT count={scores['gt_count']} Pred count={scores['pred_count']} "
+        f"Matched={scores['matched_count']} Coverage={scores['coverage']:.3f}\n"
+        f"GT path={scores['gt_path_used']}\nPred path={scores['pred_path_used']}"
+    )
     return scores
