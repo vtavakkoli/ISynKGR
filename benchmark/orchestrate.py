@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from benchmark.report import generate_final_report
+from isynkgr.validation.orchestration import build_benchmark_orchestrate_steps
 
 SCENARIOS = [
     "baseline",
@@ -26,26 +27,13 @@ def _run(cmd: list[str], step: str) -> None:
 
 def main() -> int:
     try:
-        _run([sys.executable, "-u", "-m", "benchmark.sample_validate"], "STEP 1/4: sample validation")
+        orchestrate_steps = build_benchmark_orchestrate_steps(sys.executable, SCENARIOS)
+
+        step_label, step_cmd = orchestrate_steps[0]
+        _run(step_cmd, step_label)
         print("STEP 2/4: run scenarios", flush=True)
-        for scenario in SCENARIOS:
-            _run(
-                [
-                    sys.executable,
-                    "-u",
-                    "-m",
-                    "benchmark.run",
-                    "--scenario",
-                    scenario,
-                    "--config",
-                    "benchmark/config.json",
-                    "--out",
-                    f"results/{scenario}",
-                    "--max-items",
-                    "100",
-                ],
-                f" - scenario={scenario}",
-            )
+        for step_label, step_cmd in orchestrate_steps[1:]:
+            _run(step_cmd, step_label)
         print("STEP 3/4: evaluate", flush=True)
         for scenario in SCENARIOS:
             metrics_path = Path(f"results/{scenario}/metrics.json")

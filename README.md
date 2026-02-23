@@ -2,6 +2,8 @@
 
 ISynKGR is an industrial translation library for standards-aware artifact translation (hybrid LLM + KG/GraphRAG + rules), plus a container benchmark framework.
 
+Benchmark orchestration is canonical under `benchmark/` (legacy `isynkgr.evaluation.*` modules are deprecated compatibility wrappers).
+
 ## How to run benchmark
 
 ### 1) Fast fail-first sample validation
