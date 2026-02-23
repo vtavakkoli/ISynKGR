@@ -7,11 +7,26 @@ name = "isynkgr"
 version = "0.2.0"
 description = "Industrial Semantic Knowledge Graph Reasoner translation and benchmark framework"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+  "pydantic>=2.6,<3",
+  "matplotlib>=3.8,<4",
+]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.6,<1",
+]
+
+benchmark = [
+  "matplotlib>=3.8,<4",
+]
+
+[project.scripts]
+isynkgr-benchmark = "isynkgr.cli:run_bench_cli"
+isynkgr-gen-samples = "isynkgr.cli:gen_samples_main"
 
 [tool.setuptools]
 include-package-data = true
