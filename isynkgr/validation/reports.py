@@ -7,5 +7,5 @@ def mapping_validity(mappings: list[Mapping]) -> tuple[bool, list[str]]:
     errs = []
     for m in mappings:
         if not (0 <= m.confidence <= 1):
-            errs.append(f"invalid confidence {m.confidence} for {m.source_id}")
+            errs.append(f"invalid confidence {m.confidence} for {m.source_path}")
     return (not errs, errs)

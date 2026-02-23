@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "Industrial Semantic Knowledge Graph Reasoner translation and benchmark framework"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["pydantic>=2,<3"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]

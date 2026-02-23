@@ -27,11 +27,13 @@ def _run_local_baseline(mode: str, out_dir: Path) -> None:
             mapping_lines.append(
                 json.dumps(
                     {
-                        "source_id": f"ns=2;i={1000+idx}",
-                        "target_id": f"aas-{idx}",
-                        "relation_type": "fallback",
+                        "source_path": f"ns=2;i={1000+idx}",
+                        "target_path": f"aas-{idx}",
+                        "mapping_type": "fallback",
+                        "transform": None,
                         "confidence": 0.2,
-                        "evidence_ids": [],
+                        "rationale": "Fallback mapping from report runner.",
+                        "evidence": [],
                     }
                 )
             )

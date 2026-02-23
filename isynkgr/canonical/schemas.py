@@ -4,15 +4,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from isynkgr.common_model import SimpleModel
+from isynkgr.icr.mapping_schema import MappingRecord
 
 
-@dataclass
-class Mapping(SimpleModel):
-    source_id: str
-    target_id: str
-    relation_type: str = "equivalent"
-    confidence: float = 0.5
-    evidence_ids: list[str] = field(default_factory=list)
+Mapping = MappingRecord
 
 
 @dataclass

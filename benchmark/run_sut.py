@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 from pathlib import Path
 
 from isynkgr.pipeline.hybrid import TranslatorConfig
 from isynkgr.translator import Translator
-
-ALLOWED_MAPPING_TYPES = {"equivalent", "fallback", "approximate"}
-AAS_ID_PATTERN = re.compile(r"^aas-[A-Za-z0-9_-]+$")
+from isynkgr.icr.mapping_schema import ingest_mapping_payload, normalize_mapping_path
 
 
 def _fmt_s(seconds: float) -> str:
@@ -23,38 +20,26 @@ def _read_dataset(dataset_dir: Path, max_samples: int) -> list[dict]:
         rows = [json.loads(line) for line in dataset_file.read_text().splitlines() if line.strip()]
         return rows[:max_samples]
     opc_files = sorted((dataset_dir.parent / "opcua" / "synthetic").glob("*.xml"))[:max_samples]
-    return [{"id": f.stem, "source_path": str(f), "source_id": f"ns=2;i={1000 + i}"} for i, f in enumerate(opc_files)]
+    return [{"id": f.stem, "source_path": str(f)} for i, f in enumerate(opc_files)]
 
 
-def _validate_mapping(mapping: dict, seen_keys: set[tuple[str, str, str]]) -> tuple[bool, list[dict]]:
+def _validate_mapping(mapping: dict, seen_keys: set[tuple[str, str, str]]) -> tuple[bool, list[dict], dict | None]:
     violations: list[dict] = []
-    source_id = mapping.get("source_id")
-    target_id = mapping.get("target_id")
-    mapping_type = mapping.get("mapping_type") or mapping.get("relation_type")
+    try:
+        record = ingest_mapping_payload(mapping, migrate_legacy=True)
+    except Exception as exc:
+        return False, [{"type": "schema_invalid", "message": str(exc)}], None
 
-    if not source_id:
-        violations.append({"type": "required_field", "message": "source_id missing"})
-    if not target_id:
-        violations.append({"type": "required_field", "message": "target_id missing"})
-    if not mapping_type:
-        violations.append({"type": "required_field", "message": "mapping_type missing"})
-    elif mapping_type not in ALLOWED_MAPPING_TYPES:
-        violations.append({"type": "mapping_type_invalid", "message": f"mapping_type={mapping_type} not in {sorted(ALLOWED_MAPPING_TYPES)}"})
+    if float(record.confidence) < 0.5:
+        violations.append({"type": "confidence_low", "message": f"confidence too low: {record.confidence}"})
 
-    if target_id and not AAS_ID_PATTERN.match(str(target_id)):
-        violations.append({"type": "target_id_format", "message": f"Invalid target_id format: {target_id}"})
-
-    confidence = mapping.get("confidence")
-    if confidence is None or float(confidence) < 0.5:
-        violations.append({"type": "confidence_low", "message": f"confidence too low: {confidence}"})
-
-    dedup_key = (str(source_id), str(target_id), str(mapping_type))
+    dedup_key = (normalize_mapping_path(record.source_path), normalize_mapping_path(record.target_path), str(record.mapping_type))
     if dedup_key in seen_keys:
         violations.append({"type": "duplicate_mapping", "message": f"Duplicate mapping key: {dedup_key}"})
     else:
         seen_keys.add(dedup_key)
 
-    return (len(violations) == 0), violations
+    return (len(violations) == 0), violations, record.model_dump()
 
 
 def main() -> None:
@@ -97,10 +82,7 @@ def main() -> None:
         if source_path:
             sample_path = Path(source_path)
         else:
-            source_id = row.get("source_id") or f"ns=2;i={1000 + idx - 1}"
             sample_path = dataset_dir.parent / "opcua" / "synthetic" / f"opcua_{idx - 1:03d}.xml"
-            if not sample_path.exists():
-                sample_path = dataset_dir.parent / "opcua" / "synthetic" / f"opcua_{int(str(source_id).split('=')[-1]) - 1000:03d}.xml"
 
         result = translator.translate("opcua", "aas", str(sample_path), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
         llm_error = (result.provenance.metadata or {}).get("llm_error") if result.provenance else None
@@ -111,23 +93,24 @@ def main() -> None:
         if result.mappings:
             for m in result.mappings:
                 record = m.model_dump()
-                record["mapping_type"] = record.get("relation_type", "equivalent")
-                is_valid, violations = _validate_mapping(record, seen_keys)
+                is_valid, violations, normalized = _validate_mapping(record, seen_keys)
                 if not is_valid:
                     item_violations.extend(violations)
-                mapping_lines.append(json.dumps(record))
+                if normalized is not None:
+                    mapping_lines.append(json.dumps(normalized))
         else:
             fallback = {
-                "source_id": row.get("source_id", f"ns=2;i={1000 + idx - 1}"),
-                "target_id": f"aas-{idx - 1}",
-                "relation_type": "fallback",
+                "source_path": normalize_mapping_path(row.get("source_path", f"ns=2;i={1000 + idx - 1}")),
+                "target_path": f"aas-{idx - 1}",
                 "mapping_type": "fallback",
                 "confidence": 0.2,
-                "evidence_ids": [],
+                "rationale": "Fallback mapping generated because model returned no mappings.",
+                "evidence": [],
             }
-            _, violations = _validate_mapping(fallback, seen_keys)
+            _, violations, normalized = _validate_mapping(fallback, seen_keys)
             item_violations.extend(violations)
-            mapping_lines.append(json.dumps(fallback))
+            if normalized is not None:
+                mapping_lines.append(json.dumps(normalized))
 
         valid = len(item_violations) == 0
         validations.append({"valid": valid, "violations": item_violations})
