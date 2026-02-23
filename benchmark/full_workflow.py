@@ -63,6 +63,7 @@ def _copy_gt_and_dataset(artifacts_dir: Path) -> None:
                 "target_standard": "AAS",
                 "tier": "canonical",
                 "provenance": {"generator": "datasets/v1/crosswalk/gt_mappings.jsonl"},
+                "source_path": str(Path("datasets/v1/opcua/synthetic") / f"opcua_{len(rows):03d}.xml"),
             }
         )
     (artifacts_dir / "dataset.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
@@ -73,15 +74,16 @@ def _run_variant(variant_name: str, mode: str, artifacts_dir: Path, cfg_path: Pa
     out_dir.mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
-    env["DATASET_DIR"] = str(Path("datasets/v1/crosswalk").resolve())
+    env["DATASET_DIR"] = str(artifacts_dir.resolve())
     env["OUTPUT_DIR"] = str(out_dir.resolve())
     env["CONFIG_PATH"] = str(cfg_path.resolve())
     env["SUT_MODE"] = mode
+    env["MAX_ITEMS"] = str(int(os.getenv("MAX_ITEMS", "100")))
 
     start = time.perf_counter()
     log_path = logs_dir / f"{variant_name}.log"
     with log_path.open("w") as fp:
-        proc = subprocess.run(["python", "-m", "benchmark.run_sut"], env=env, stdout=fp, stderr=subprocess.STDOUT)
+        proc = subprocess.run(["python", "-u", "-m", "benchmark.run_sut"], env=env, stdout=fp, stderr=subprocess.STDOUT)
     elapsed = time.perf_counter() - start
     if proc.returncode != 0:
         raise RuntimeError(f"variant {variant_name} failed, see {log_path}")
@@ -94,7 +96,7 @@ def _run_variant(variant_name: str, mode: str, artifacts_dir: Path, cfg_path: Pa
     metrics["query_response_quality_proxy"] = metrics.get("precision", 0.0)
     metrics["hallucination_rate"] = 1.0 - metrics.get("precision", 0.0)
     metrics["time_s"] = elapsed
-    metrics["throughput_items_per_s"] = 3 / elapsed if elapsed > 0 else 0.0
+    metrics["throughput_items_per_s"] = metrics.get("pred_count", 0) / elapsed if elapsed > 0 else 0.0
     metrics["cost_proxy"] = elapsed * 0.01
     metrics["robustness_paraphrase_consistency"] = max(0.0, metrics.get("f1", 0.0) - 0.01)
     metrics["robustness_noise_sensitivity"] = max(0.0, metrics.get("f1", 0.0) - 0.03)
