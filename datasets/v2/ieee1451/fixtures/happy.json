@@ -1,0 +1,28 @@
+{
+  "standard": "ieee1451",
+  "teds": [
+    {
+      "id": "ted-42",
+      "name": "Boiler Rack",
+      "meta": {
+        "manufacturer": "Acme Sensors",
+        "model": "TS-200"
+      },
+      "channels": [
+        {
+          "id": "ch-1",
+          "name": "temperature",
+          "dtype": "FLOAT",
+          "unit": "degC",
+          "range": {"min": -50.0, "max": 150.0}
+        },
+        {
+          "id": "ch-2",
+          "name": "alarm",
+          "dtype": "BOOL",
+          "unit": "flag"
+        }
+      ]
+    }
+  ]
+}

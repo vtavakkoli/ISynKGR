@@ -7,6 +7,8 @@ from typing import Literal
 
 from isynkgr.adapters.aas import AASAdapter
 from isynkgr.adapters.opcua import OPCUAAdapter
+from isynkgr.adapters.iec61499 import IEC61499Adapter
+from isynkgr.adapters.ieee1451 import IEEE1451Adapter
 from isynkgr.canonical.model import CanonicalModel
 from isynkgr.canonical.schemas import Mapping, Provenance, TranslationResult
 from isynkgr.icr.mapping_schema import ingest_mapping_payload
@@ -26,7 +28,7 @@ class TranslatorConfig:
         self.enable_vector_retrieval = enable_vector_retrieval
 
 
-ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter()}
+ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter(), "iec61499": IEC61499Adapter(), "ieee1451": IEEE1451Adapter()}
 
 
 def _mapping_key(mapping: Mapping) -> tuple[str, str, str]:

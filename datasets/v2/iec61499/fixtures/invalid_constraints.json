@@ -1,0 +1,34 @@
+{
+  "standard": "iec61499",
+  "devices": [
+    {
+      "id": "dev-main",
+      "resources": [
+        {
+          "id": "res-ctrl",
+          "function_blocks": [
+            {
+              "id": "fb-temp",
+              "type": "PID",
+              "inputs": [
+                {
+                  "id": "in-pv",
+                  "dtype": "FLOAT",
+                  "unit": "",
+                  "range": {"min": 10, "max": -10}
+                }
+              ],
+              "outputs": [
+                {
+                  "id": "out-1",
+                  "dtype": "DOUBLE",
+                  "unit": "degC"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
