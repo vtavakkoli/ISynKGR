@@ -5,6 +5,7 @@ from xml.etree import ElementTree as ET
 
 from isynkgr.canonical.model import CanonicalEdge, CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import ValidationReport, ValidationViolation
+from isynkgr.icr.entities import Endpoint, build_endpoint_path
 
 UA_TYPES = {"UAObjectType", "UAVariable", "UADataType"}
 
@@ -25,10 +26,11 @@ class OPCUAAdapter:
                 nid = elem.attrib.get("NodeId", "")
                 if not nid:
                     continue
-                model.nodes.append(CanonicalNode(id=nid, type=tag, label=elem.attrib.get("BrowseName"), attributes={"DisplayName": (elem.findtext("{*}DisplayName") or "")}))
+                endpoint = Endpoint(id=nid, path=build_endpoint_path(self.name, nid), protocol=self.name, label=elem.attrib.get("BrowseName"), metadata={"DisplayName": (elem.findtext("{*}DisplayName") or ""), "raw_id": nid})
+                model.nodes.append(CanonicalNode(id=endpoint.path, type=tag, label=endpoint.label, attributes=endpoint.model_dump()))
                 for r in elem.findall("{*}References/{*}Reference"):
                     if r.text:
-                        refs.append((nid, r.text.strip(), r.attrib.get("ReferenceType", "References")))
+                        refs.append((build_endpoint_path(self.name, nid), build_endpoint_path(self.name, r.text.strip()), r.attrib.get("ReferenceType", "References")))
         node_ids = {n.id for n in model.nodes}
         for s, t, rel in refs:
             if t in node_ids:

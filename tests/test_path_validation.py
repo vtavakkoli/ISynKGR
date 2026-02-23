@@ -34,3 +34,11 @@ def test_ingest_rejects_non_protocol_paths() -> None:
                 "evidence": [],
             }
         )
+
+
+def test_normalize_path_handles_case_and_separators() -> None:
+    assert normalize_mapping_path("  OPCUA://ns=2;i=1000\\ ") == "opcua://ns=2;i=1000"
+
+
+def test_normalize_path_strips_namespace_prefixes() -> None:
+    assert normalize_mapping_path("opcua://namespace:ns=3;s=Machine/namespace:Speed") == "opcua://ns=3;s=Machine/Speed"
