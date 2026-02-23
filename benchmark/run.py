@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib import request
+from urllib.parse import urlparse
 
 from benchmark.evaluate import evaluate_run
 
@@ -22,20 +23,42 @@ SCENARIO_MODE = {
 }
 
 
-def wait_for_ollama(base_url: str, timeout_s: int = 90) -> None:
-    print(f"Waiting for Ollama at {base_url} ...", flush=True)
+def normalize_ollama_host(raw_host: str) -> str:
+    value = (raw_host or "").strip()
+    if not value:
+        return "http://host.docker.internal:11434"
+
+    if "://" not in value:
+        value = f"http://{value}"
+
+    parsed = urlparse(value)
+    host = parsed.hostname or "host.docker.internal"
+    port = parsed.port or 11434
+
+    # 0.0.0.0 is a bind address; for clients use a routable host.
+    if host == "0.0.0.0":
+        host = "localhost"
+
+    return f"{parsed.scheme or 'http'}://{host}:{port}"
+
+
+
+
+def wait_for_ollama(base_url: str, timeout_s: int = 90) -> str:
+    normalized = normalize_ollama_host(base_url)
+    print(f"Waiting for Ollama at {normalized} ...", flush=True)
     deadline = time.time() + timeout_s
-    url = base_url.rstrip("/") + "/api/tags"
+    url = normalized.rstrip("/") + "/api/tags"
     while time.time() < deadline:
         try:
             with request.urlopen(url, timeout=3) as resp:
                 if resp.status == 200:
                     print("Ollama ready.", flush=True)
-                    return
+                    return normalized
         except Exception as exc:  # noqa: BLE001
             print(f"... still waiting ({exc})", flush=True)
         time.sleep(3)
-    raise RuntimeError(f"Timed out waiting for Ollama at {base_url}")
+    raise RuntimeError(f"Timed out waiting for Ollama at {normalized}")
 
 
 def _git_hash() -> str:
@@ -84,10 +107,13 @@ def run_scenario(args: argparse.Namespace) -> int:
         "mode": mode,
     }
     (logs_dir / "run.log").write_text(json.dumps(header) + "\n")
-    (out_dir / "config_resolved.json").write_text(json.dumps(vars(args), indent=2, sort_keys=True))
+    ollama_host = normalize_ollama_host(args.ollama_host)
+    resolved_args = vars(args).copy()
+    resolved_args["ollama_host"] = ollama_host
+    (out_dir / "config_resolved.json").write_text(json.dumps(resolved_args, indent=2, sort_keys=True))
 
     if mode in {"isynkgr_hybrid", "llm_only", "rag_only"}:
-        wait_for_ollama(args.ollama_host)
+        ollama_host = wait_for_ollama(ollama_host)
 
     env = os.environ.copy()
     env.update(
@@ -101,7 +127,7 @@ def run_scenario(args: argparse.Namespace) -> int:
             "MODEL_NAME": args.model_name,
             "MAX_ITEMS": str(dataset_items),
             "TIER": args.tier,
-            "OLLAMA_BASE_URL": args.ollama_host,
+            "OLLAMA_BASE_URL": ollama_host,
         }
     )
     Path(env["OUTPUT_DIR"]).mkdir(parents=True, exist_ok=True)
