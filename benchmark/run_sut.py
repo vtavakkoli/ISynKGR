@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import time
 from pathlib import Path
 
 from isynkgr.pipeline.hybrid import TranslatorConfig
 from isynkgr.translator import Translator
-
-ALLOWED_MAPPING_TYPES = {"equivalent", "fallback", "approximate"}
-AAS_ID_PATTERN = re.compile(r"^aas-[A-Za-z0-9_-]+$")
+from isynkgr.icr.mapping_schema import ingest_mapping_payload, normalize_mapping_path
 
 
 def _fmt_s(seconds: float) -> str:
@@ -177,16 +174,17 @@ def main() -> None:
                 mapping_lines.append(json.dumps(record))
         else:
             fallback = {
-                "source_id": row.get("source_id", f"ns=2;i={1000 + idx - 1}"),
-                "target_id": f"aas-{idx - 1}",
-                "relation_type": "fallback",
+                "source_path": normalize_mapping_path(row.get("source_path", f"ns=2;i={1000 + idx - 1}")),
+                "target_path": f"aas-{idx - 1}",
                 "mapping_type": "fallback",
                 "confidence": 0.2,
-                "evidence_ids": [],
+                "rationale": "Fallback mapping generated because model returned no mappings.",
+                "evidence": [],
             }
             _, violations = _validate_mapping(fallback, seen_keys, confidence_threshold)
             item_violations.extend(violations)
-            mapping_lines.append(json.dumps(fallback))
+            if normalized is not None:
+                mapping_lines.append(json.dumps(normalized))
 
         blocking_item_violations = [
             v for v in item_violations if v.get("type") != "confidence_low"

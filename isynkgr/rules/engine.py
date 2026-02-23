@@ -14,5 +14,14 @@ class RuleEngine:
         target_nodes = {n.label: n for n in (target.nodes if target else [])}
         for node in source.nodes:
             if node.label and node.label in target_nodes:
-                mappings.append(Mapping(source_id=node.id, target_id=target_nodes[node.label].id, relation_type="label_match", confidence=0.9, evidence_ids=["rule:label_match"]))
+                mappings.append(
+                    Mapping(
+                        source_path=node.id,
+                        target_path=target_nodes[node.label].id,
+                        mapping_type="label_match",
+                        confidence=0.9,
+                        rationale="Rule-based label match.",
+                        evidence=["rule:label_match"],
+                    )
+                )
         return mappings
