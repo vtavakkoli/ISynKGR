@@ -24,6 +24,10 @@ def run_benchmark(compose_file: str = "docker/compose/docker-compose.bench.yml",
 
     counts = validate_or_generate(Path("datasets/v1"))
 
+    gt_src = Path(dataset_dir) / "gt_mappings.jsonl"
+    if gt_src.exists():
+        (run_dir / "ground_truth.jsonl").write_text(gt_src.read_text())
+
     modes = BASELINES if full else ["rule_only", "graph_only", "isynkgr_hybrid"]
     total = len(modes)
     rows = []
@@ -39,9 +43,9 @@ def run_benchmark(compose_file: str = "docker/compose/docker-compose.bench.yml",
         out_dir = run_dir / mode
         out_dir.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
-        env["DATASET_DIR"] = str(Path(dataset_dir).resolve())
-        env["OUTPUT_DIR"] = str(out_dir.resolve())
-        env["CONFIG_PATH"] = str((Path("benchmark") / "config.json").resolve())
+        env["DATASET_DIR"] = "/data/crosswalk"
+        env["OUTPUT_DIR"] = f"/out/{run_id}/{mode}"
+        env["CONFIG_PATH"] = "/config/config.json"
         completed = idx - 1
         remaining = total - completed
         log(f"[RUN] baseline={mode} total={total} completed={completed} remaining={remaining}")
