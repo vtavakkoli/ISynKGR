@@ -4,6 +4,8 @@ import html
 import json
 from pathlib import Path
 
+CANONICAL_METRIC_KEYS = ("precision", "recall", "f1", "validity_pass_rate", "violation_counts")
+
 
 def _fmt(value: float) -> str:
     return f"{value:.3f}"
@@ -18,101 +20,6 @@ def _markdown_table(rows: list[dict], columns: list[str]) -> str:
     return "\n".join([header, sep, *body])
 
 
-def _bar_svg(items: list[tuple[str, float]], title: str, width: int = 800, row_h: int = 28) -> str:
-    if not items:
-        return ""
-    max_v = max(v for _, v in items) or 1.0
-    left = 180
-    chart_w = width - left - 20
-    height = 60 + row_h * len(items)
-    lines = [
-        f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">',
-        f'<text x="10" y="24" font-size="18" font-family="Arial">{html.escape(title)}</text>',
-    ]
-    y = 50
-    for name, value in items:
-        bar_w = int((value / max_v) * chart_w)
-        safe = html.escape(name)
-        lines.append(f'<text x="10" y="{y+14}" font-size="12" font-family="Arial">{safe}</text>')
-        lines.append(f'<rect x="{left}" y="{y}" width="{bar_w}" height="16" fill="#4e79a7" />')
-        lines.append(f'<text x="{left + bar_w + 6}" y="{y+13}" font-size="12" font-family="Arial">{value:.3f}</text>')
-        y += row_h
-    lines.append("</svg>")
-    return "\n".join(lines)
-
-
-def write_report(run_dir: Path, rows: list[dict]) -> None:
-    ranked_f1 = sorted(rows, key=lambda r: r.get("f1", 0.0), reverse=True)
-    ranked_validity = sorted(rows, key=lambda r: r.get("validity_pass_rate", 0.0), reverse=True)
-
-    compact_rows = []
-    for row in ranked_f1:
-        compact_rows.append(
-            {
-                "baseline": row.get("baseline", row.get("scenario", "")),
-                "precision": _fmt(row.get("precision", 0.0)),
-                "recall": _fmt(row.get("recall", 0.0)),
-                "f1": _fmt(row.get("f1", 0.0)),
-                "validity_pass_rate": _fmt(row.get("validity_pass_rate", 0.0)),
-            }
-        )
-
-    violations: dict[str, int] = {}
-    for row in rows:
-        for k, v in row.get("violation_counts", {}).items():
-            violations[k] = violations.get(k, 0) + int(v)
-
-    violation_rows = [{"violation_type": k, "count": v} for k, v in sorted(violations.items(), key=lambda kv: kv[1], reverse=True)]
-
-    md = [
-        "# ISynKGR Benchmark Report",
-        "",
-        "## Ranking by F1",
-        _markdown_table(compact_rows, ["baseline", "precision", "recall", "f1", "validity_pass_rate"]),
-        "",
-        "## Ranking by Validity Pass Rate",
-        _markdown_table(
-            [
-                {
-                    "baseline": row.get("baseline", row.get("scenario", "")),
-                    "validity_pass_rate": _fmt(row.get("validity_pass_rate", 0.0)),
-                    "f1": _fmt(row.get("f1", 0.0)),
-                }
-                for row in ranked_validity
-            ],
-            ["baseline", "validity_pass_rate", "f1"],
-        ),
-        "",
-        "## Error Taxonomy",
-        _markdown_table(violation_rows or [{"violation_type": "none", "count": 0}], ["violation_type", "count"]),
-        "",
-        "## Raw Results",
-        "```json",
-        json.dumps(rows, indent=2),
-        "```",
-    ]
-    (run_dir / "report.md").write_text("\n".join(md))
-
-    f1_items = [(r.get("baseline", r.get("scenario", "")), float(r.get("f1", 0.0))) for r in ranked_f1]
-    validity_items = [(r.get("baseline", r.get("scenario", "")), float(r.get("validity_pass_rate", 0.0))) for r in ranked_validity]
-    violation_items = [(v["violation_type"], float(v["count"])) for v in violation_rows[:8]]
-
-    summary_table = html.escape(_markdown_table(compact_rows, ["baseline", "precision", "recall", "f1", "validity_pass_rate"]))
-    raw_json = html.escape(json.dumps(rows, indent=2))
-    html_content = f"""<html><body style="font-family:Arial,sans-serif;margin:24px">
-<h1>ISynKGR Benchmark Report</h1>
-<h2>Summary Table</h2>
-<pre>{summary_table}</pre>
-<h2>Plots</h2>
-{_bar_svg(f1_items, "F1 by Baseline")}
-{_bar_svg(validity_items, "Validity Pass Rate by Baseline")}
-{_bar_svg(violation_items, "Top Violation Counts")}
-<h2>Raw JSON</h2>
-<pre>{raw_json}</pre>
-</body></html>"""
-    (run_dir / "report.html").write_text(html_content)
-
-
 def _import_matplotlib_pyplot():
     try:
         import matplotlib.pyplot as plt  # type: ignore
@@ -124,8 +31,17 @@ def _import_matplotlib_pyplot():
     return plt
 
 
+def _write_placeholder_png(path: Path) -> None:
+    # 1x1 transparent PNG
+    path.write_bytes(bytes.fromhex("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000A49444154789C6360000000020001E221BC330000000049454E44AE426082"))
+
+
 def _bar_chart(path: Path, names: list[str], values: list[float], title: str, ylabel: str) -> None:
-    plt = _import_matplotlib_pyplot()
+    try:
+        plt = _import_matplotlib_pyplot()
+    except RuntimeError:
+        _write_placeholder_png(path)
+        return
     plt.figure(figsize=(9, 4))
     plt.bar(names, values)
     plt.title(title)
@@ -134,6 +50,149 @@ def _bar_chart(path: Path, names: list[str], values: list[float], title: str, yl
     plt.tight_layout()
     plt.savefig(path)
     plt.close()
+
+
+def _scenario_name(row: dict) -> str:
+    return str(row.get("baseline") or row.get("scenario") or "")
+
+
+def _metric(row: dict, key: str) -> float:
+    return float(row.get(key, 0.0))
+
+
+def _aggregate_violations(rows: list[dict]) -> dict[str, int]:
+    violations: dict[str, int] = {}
+    for row in rows:
+        violation_counts = row.get("violation_counts") or {}
+        for key, value in violation_counts.items():
+            violations[key] = violations.get(key, 0) + int(value)
+    return violations
+
+
+def _build_validity_breakdown(violations: dict[str, int]) -> list[dict]:
+    return [
+        {"reason": "mapping_type_invalid", "count": int(violations.get("mapping_type_invalid", 0))},
+        {"reason": "target_id_format", "count": int(violations.get("target_id_format", 0))},
+        {
+            "reason": "target_validator_errors",
+            "count": int(sum(v for k, v in violations.items() if str(k).startswith("target_"))),
+        },
+        {"reason": "confidence_low", "count": int(violations.get("confidence_low", 0))},
+    ]
+
+
+def write_report(run_dir: Path, rows: list[dict]) -> None:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    plots_dir = run_dir / "plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
+
+    canonical_rows = []
+    for row in rows:
+        canonical_rows.append(
+            {
+                "scenario": _scenario_name(row),
+                "precision": _metric(row, "precision"),
+                "recall": _metric(row, "recall"),
+                "f1": _metric(row, "f1"),
+                "validity_pass_rate": _metric(row, "validity_pass_rate"),
+                "violation_counts": row.get("violation_counts") or {},
+            }
+        )
+
+    ranked_f1 = sorted(canonical_rows, key=lambda r: r["f1"], reverse=True)
+    ranked_validity = sorted(canonical_rows, key=lambda r: r["validity_pass_rate"], reverse=True)
+    violations = _aggregate_violations(canonical_rows)
+    violation_rows = [
+        {"violation_type": k, "count": v}
+        for k, v in sorted(violations.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+    validity_breakdown = _build_validity_breakdown(violations)
+
+    summary_rows = [
+        {
+            "scenario": r["scenario"],
+            "f1": _fmt(r["f1"]),
+            "validity_pass_rate": _fmt(r["validity_pass_rate"]),
+        }
+        for r in ranked_f1
+    ]
+
+    report_payload = {
+        "canonical_metric_keys": list(CANONICAL_METRIC_KEYS),
+        "summary_table": summary_rows,
+        "why_validity_low": validity_breakdown,
+        "top_violations": violation_rows,
+        "scenarios": canonical_rows,
+    }
+    (run_dir / "report.json").write_text(json.dumps(report_payload, indent=2))
+
+    md = [
+        "# ISynKGR Benchmark Report",
+        "",
+        "Canonical metric keys consumed from evaluator: `precision`, `recall`, `f1`, `validity_pass_rate`, `violation_counts`.",
+        "",
+        "## Summary table (F1 + validity)",
+        _markdown_table(summary_rows, ["scenario", "f1", "validity_pass_rate"]),
+        "",
+        "## Why validity is low",
+        _markdown_table(validity_breakdown, ["reason", "count"]),
+        "",
+        "## Top violations",
+        _markdown_table(violation_rows or [{"violation_type": "none", "count": 0}], ["violation_type", "count"]),
+        "",
+        "## Plots",
+        "- `plots/f1_by_scenario.png`",
+        "- `plots/validity_by_scenario.png`",
+        "- `plots/top_violations.png`",
+        "",
+        "## Raw JSON details",
+        "```json",
+        json.dumps(report_payload, indent=2),
+        "```",
+    ]
+    (run_dir / "report.md").write_text("\n".join(md))
+
+    names = [r["scenario"] for r in ranked_f1]
+    _bar_chart(plots_dir / "f1_by_scenario.png", names, [r["f1"] for r in ranked_f1], "F1 by Scenario", "f1")
+    _bar_chart(
+        plots_dir / "validity_by_scenario.png",
+        [r["scenario"] for r in ranked_validity],
+        [r["validity_pass_rate"] for r in ranked_validity],
+        "Validity by Scenario",
+        "validity_pass_rate",
+    )
+    top_violation_rows = violation_rows[:10] if violation_rows else [{"violation_type": "none", "count": 0}]
+    _bar_chart(
+        plots_dir / "top_violations.png",
+        [r["violation_type"] for r in top_violation_rows],
+        [float(r["count"]) for r in top_violation_rows],
+        "Top Violations",
+        "count",
+    )
+
+    summary_table = html.escape(_markdown_table(summary_rows, ["scenario", "f1", "validity_pass_rate"]))
+    validity_table = html.escape(_markdown_table(validity_breakdown, ["reason", "count"]))
+    raw_json = html.escape(json.dumps(report_payload, indent=2))
+    html_content = f"""<html><body style="font-family:Arial,sans-serif;margin:24px">
+<h1>ISynKGR Benchmark Report</h1>
+<p>Canonical metric keys consumed from evaluator: <code>precision</code>, <code>recall</code>, <code>f1</code>, <code>validity_pass_rate</code>, <code>violation_counts</code>.</p>
+<h2>Summary table (F1 + validity)</h2>
+<pre>{summary_table}</pre>
+<h2>Why validity is low</h2>
+<pre>{validity_table}</pre>
+<h2>Plots</h2>
+<ul>
+<li><img alt="F1 by scenario" src="plots/f1_by_scenario.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="Validity by scenario" src="plots/validity_by_scenario.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="Top violations" src="plots/top_violations.png" style="max-width:100%;height:auto" /></li>
+</ul>
+<h2>Raw JSON details</h2>
+<details>
+<summary>Expand raw JSON details</summary>
+<pre>{raw_json}</pre>
+</details>
+</body></html>"""
+    (run_dir / "report.html").write_text(html_content)
 
 
 def generate_final_report(results_root: Path = Path("results")) -> Path:
@@ -149,32 +208,14 @@ def generate_final_report(results_root: Path = Path("results")) -> Path:
     for scenario in scenarios:
         metrics_path = results_root / scenario / "metrics.json"
         if metrics_path.exists():
-            rows.append(json.loads(metrics_path.read_text()))
+            payload = json.loads(metrics_path.read_text())
+            if isinstance(payload, list):
+                for row in payload:
+                    if isinstance(row, dict):
+                        rows.append(row)
+            elif isinstance(payload, dict):
+                rows.append(payload)
 
     final_dir = results_root / "final"
-    charts_dir = final_dir / "charts"
-    charts_dir.mkdir(parents=True, exist_ok=True)
-
-    (final_dir / "metrics_merged.json").write_text(json.dumps(rows, indent=2))
     write_report(final_dir, rows)
-
-    names = [r.get("scenario", r.get("baseline", "")) for r in rows]
-    _bar_chart(charts_dir / "f1_by_scenario.png", names, [float(r.get("f1", 0.0)) for r in rows], "F1 by Scenario", "F1")
-    _bar_chart(
-        charts_dir / "validity_by_scenario.png",
-        names,
-        [float(r.get("validity_pass_rate", 0.0)) for r in rows],
-        "Validity Pass Rate by Scenario",
-        "validity_pass_rate",
-    )
-
-    plt = _import_matplotlib_pyplot()
-    plt.figure(figsize=(6, 4))
-    plt.scatter([float(r.get("time_s", 0.0)) for r in rows], [float(r.get("f1", 0.0)) for r in rows])
-    plt.title("time_s vs F1")
-    plt.xlabel("time_s")
-    plt.ylabel("f1")
-    plt.tight_layout()
-    plt.savefig(charts_dir / "time_vs_f1.png")
-    plt.close()
     return final_dir
