@@ -51,3 +51,18 @@ docker compose run --rm report
 - Use fixed `SEED` (default 42) and explicit `MODEL_NAME`.
 - Resolved runtime configuration is written per scenario.
 - Git hash is logged when available.
+
+
+## Mapping Path Validation
+
+ISynKGR now validates mapping `source_path`/`target_path` using deterministic, protocol-specific regexes in `isynkgr/icr/path_validation.py`:
+
+- **AAS**: `aas://{aas_id}/submodel/{sm_idShort}/element/{path...}`
+- **OPC UA**: `opcua://ns={ns};s={string_id}` or `opcua://ns={ns};i={int_id}`
+- **IEC 61499 (subset)**: `iec61499://{device}/{resource}/{fb}/{var}`
+- **IEEE 1451 (subset)**: `ieee1451://{ted_id}/{channel}/{field}`
+
+Implementation notes:
+- Patterns are **fully anchored** (`^...$`).
+- Segment classes use bounded character sets (`[A-Za-z0-9._~-]+`) with no catastrophic backtracking constructs.
+- Validation is shared and reused by ingestion, pipeline output checks, and mapping validity checks.

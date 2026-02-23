@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from isynkgr.icr.path_validation import validate_protocol_path
+
 
 class MappingType(str, Enum):
     EQUIVALENT = "equivalent"
@@ -24,9 +26,16 @@ class MappingTransformOp(str, Enum):
 
 def normalize_mapping_path(path: str) -> str:
     value = (path or "").strip().replace("\\", "/")
-    value = re.sub(r"/+", "/", value)
     if value.startswith("./"):
         value = value[2:]
+
+    protocol, sep, rest = value.partition("://")
+    if sep:
+        rest = re.sub(r"/+", "/", rest)
+        value = f"{protocol.lower()}://{rest}"
+    else:
+        value = re.sub(r"/+", "/", value)
+
     return value.rstrip("/")
 
 
@@ -75,6 +84,9 @@ class MappingRecord:
             raise ValueError("source_path is required")
         if not self.target_path:
             raise ValueError("target_path is required")
+
+        validate_protocol_path(self.source_path, "source_path")
+        validate_protocol_path(self.target_path, "target_path")
 
         if not isinstance(self.mapping_type, MappingType):
             self.mapping_type = MappingType(str(self.mapping_type))

@@ -27,8 +27,8 @@ def _run_local_baseline(mode: str, out_dir: Path) -> None:
             mapping_lines.append(
                 json.dumps(
                     {
-                        "source_path": f"ns=2;i={1000+idx}",
-                        "target_path": f"aas-{idx}",
+                        "source_path": f"opcua://ns=2;i={1000+idx}",
+                        "target_path": f"aas://aas-{idx}/submodel/default/element/value",
                         "mapping_type": "fallback",
                         "transform": None,
                         "confidence": 0.2,

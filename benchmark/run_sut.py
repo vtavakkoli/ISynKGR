@@ -101,8 +101,8 @@ def main() -> None:
                     mapping_lines.append(json.dumps(normalized))
         else:
             fallback = {
-                "source_path": normalize_mapping_path(row.get("source_path", f"ns=2;i={1000 + idx - 1}")),
-                "target_path": f"aas-{idx - 1}",
+                "source_path": normalize_mapping_path(row.get("mapping_source_path", f"opcua://ns=2;i={1000 + idx - 1}")),
+                "target_path": f"aas://aas-{idx - 1}/submodel/default/element/value",
                 "mapping_type": "fallback",
                 "confidence": 0.2,
                 "rationale": "Fallback mapping generated because model returned no mappings.",
