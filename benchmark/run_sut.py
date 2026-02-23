@@ -84,6 +84,7 @@ def main() -> None:
         else:
             sample_path = dataset_dir.parent / "opcua" / "synthetic" / f"opcua_{idx - 1:03d}.xml"
 
+        log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
         result = translator.translate("opcua", "aas", str(sample_path), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
         llm_error = (result.provenance.metadata or {}).get("llm_error") if result.provenance else None
         if llm_error:

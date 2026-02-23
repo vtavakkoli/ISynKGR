@@ -125,6 +125,12 @@ def run_scenario(args: argparse.Namespace) -> int:
         for idx, row in enumerate(gt_rows)
     ]
     dataset_path.write_text("\n".join(json.dumps(r) for r in dataset_rows) + "\n")
+    output_dir = Path(out_dir / "predictions")
+    print(
+        f"[SCENARIO] name={scenario} mode={mode} samples={dataset_items} "
+        f"dataset_path={dataset_path} gt_path={gt_path} output_path={output_dir}",
+        flush=True,
+    )
 
     header = {
         "git_commit": _git_hash(),
@@ -150,7 +156,7 @@ def run_scenario(args: argparse.Namespace) -> int:
         {
             "PYTHONUNBUFFERED": "1",
             "DATASET_DIR": str(out_dir),
-            "OUTPUT_DIR": str(out_dir / "predictions"),
+            "OUTPUT_DIR": str(output_dir),
             "CONFIG_PATH": args.config,
             "SUT_MODE": mode,
             "SEED": str(args.seed),
@@ -161,6 +167,7 @@ def run_scenario(args: argparse.Namespace) -> int:
         }
     )
     Path(env["OUTPUT_DIR"]).mkdir(parents=True, exist_ok=True)
+    print(f"[SCENARIO] logs_path={logs_dir / 'run.log'}", flush=True)
     with (logs_dir / "run.log").open("a") as fp:
         proc = subprocess.Popen([sys.executable, "-u", "-m", "benchmark.run_sut"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         assert proc.stdout is not None
@@ -170,12 +177,13 @@ def run_scenario(args: argparse.Namespace) -> int:
             fp.flush()
         rc = proc.wait()
     if rc != 0:
-        print(f"Scenario failed: {scenario}. See {logs_dir / 'run.log'}", flush=True)
+        print(f"[SCENARIO-FAILED] name={scenario} exit={rc} logs_path={logs_dir / 'run.log'}", flush=True)
         return rc
 
     metrics = evaluate_run(Path(env["OUTPUT_DIR"]))
     metrics.update({"scenario": scenario, "model": args.model_name, "seed": args.seed, "tier": args.tier, "items": dataset_items})
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    print(f"[SCENARIO-DONE] name={scenario} metrics_path={out_dir / 'metrics.json'}", flush=True)
     return 0
 
 
