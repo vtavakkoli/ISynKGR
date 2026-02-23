@@ -29,6 +29,10 @@ class TranslatorConfig:
 ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter()}
 
 
+def _mapping_key(mapping: Mapping) -> tuple[str, str, str]:
+    return (mapping.source_path, mapping.target_path, str(mapping.mapping_type))
+
+
 def _git_commit() -> str:
     head = Path(".git/HEAD")
     if not head.exists():
@@ -68,14 +72,14 @@ class HybridPipeline:
                 except Exception:
                     continue
 
-        seen = set()
-        dedup = []
-        for m in sorted(mappings, key=lambda x: x.confidence, reverse=True):
-            k = (m.source_path, m.target_path, str(m.mapping_type))
-            if k not in seen:
-                dedup.append(m)
-                seen.add(k)
-        mappings = dedup
+        best_by_key: dict[tuple[str, str, str], Mapping] = {}
+        for mapping in mappings:
+            key = _mapping_key(mapping)
+            current = best_by_key.get(key)
+            if current is None or mapping.confidence > current.confidence:
+                best_by_key[key] = mapping
+
+        mappings = sorted(best_by_key.values(), key=_mapping_key)
 
         target_model = CanonicalModel(standard=target_standard, nodes=source_model.nodes, edges=source_model.edges)
         target_artifact = tgt.serialize(target_model, [m.model_dump() for m in mappings])

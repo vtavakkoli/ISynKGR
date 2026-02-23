@@ -98,6 +98,17 @@ def _git_hash() -> str:
         return "unknown"
 
 
+def _cardinality_contract_for_sample(gt_row: dict) -> dict:
+    grouped_1 = bool(gt_row.get("grouped_1") or gt_row.get("metadata", {}).get("grouped_1"))
+    mode = "grouped_1" if grouped_1 else "one_to_one"
+    expected_count = int(gt_row.get("expected_count", 1 if mode == "one_to_one" else 0))
+    return {
+        "mode": mode,
+        "expected_count": expected_count,
+        "grouped_1": grouped_1,
+    }
+
+
 def run_scenario(args: argparse.Namespace) -> int:
     scenario = args.scenario
     mode = SCENARIO_MODE[scenario]
@@ -121,6 +132,7 @@ def run_scenario(args: argparse.Namespace) -> int:
             "target_standard": "AAS",
             "tier": args.tier,
             "source_path": str(Path("datasets/v1/opcua/synthetic") / f"opcua_{idx:03d}.xml"),
+            "cardinality_contract": _cardinality_contract_for_sample(row),
         }
         for idx, row in enumerate(gt_rows)
     ]
