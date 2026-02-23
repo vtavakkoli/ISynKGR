@@ -83,10 +83,24 @@ def _run_variant(variant_name: str, mode: str, artifacts_dir: Path, cfg_path: Pa
 
     start = time.perf_counter()
     log_path = logs_dir / f"{variant_name}.log"
+    print(f"[VARIANT] name={variant_name} mode={mode} output_path={out_dir} log_path={log_path}", flush=True)
     with log_path.open("w") as fp:
-        proc = subprocess.run(["python", "-u", "-m", "benchmark.run_sut"], env=env, stdout=fp, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(
+            ["python", "-u", "-m", "benchmark.run_sut"],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+            fp.write(line)
+            fp.flush()
+        proc.wait()
     elapsed = time.perf_counter() - start
     if proc.returncode != 0:
+        print(f"[VARIANT-FAILED] name={variant_name} exit={proc.returncode} log_path={log_path}", flush=True)
         raise RuntimeError(f"variant {variant_name} failed, see {log_path}")
 
     metrics = evaluate_run(out_dir)
