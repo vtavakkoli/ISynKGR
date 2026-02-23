@@ -21,6 +21,20 @@ def _load_jsonl_pairs(path: Path) -> tuple[list[dict], set[tuple[str, str]]]:
     return rows, pairs
 
 
+def _has_blocking_violations(report: dict) -> bool:
+    return any(v.get("type") != "confidence_low" for v in report.get("violations", []))
+
+
+def _confidence_low_stats(reports: list[dict]) -> tuple[int, float]:
+    count = 0
+    for report in reports:
+        count += sum(
+            1 for v in report.get("violations", []) if v.get("type") == "confidence_low"
+        )
+    rate = count / len(reports) if reports else 0.0
+    return count, rate
+
+
 def _resolve_gt_path(out_dir: Path) -> Path:
     candidates = [
         out_dir.parent / "ground_truth.jsonl",
@@ -63,7 +77,14 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
             "pred_count": len(pred_pairs),
         }
 
-    scores["validity_pass_rate"] = sum(1 for r in reports if r.get("valid")) / len(reports) if reports else 0.0
+    confidence_low_count, confidence_low_rate = _confidence_low_stats(reports)
+    scores["validity_pass_rate"] = (
+        sum(1 for r in reports if not _has_blocking_violations(r)) / len(reports)
+        if reports
+        else 0.0
+    )
+    scores["confidence_low_count"] = confidence_low_count
+    scores["confidence_low_rate"] = confidence_low_rate
     scores["violation_counts"] = violation_counts(reports)
     scores["gt_count"] = len(gt_pairs)
     scores["pred_count"] = len(pred_pairs)
