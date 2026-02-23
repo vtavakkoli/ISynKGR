@@ -5,13 +5,21 @@ import os
 import time
 from pathlib import Path
 
+from isynkgr.icr.mapping_schema import ingest_mapping_payload, normalize_mapping_path
 from isynkgr.pipeline.hybrid import TranslatorConfig
 from isynkgr.translator import Translator
-from isynkgr.icr.mapping_schema import ingest_mapping_payload, normalize_mapping_path
 
 
 def _fmt_s(seconds: float) -> str:
     return f"{seconds:.2f}s"
+
+
+def _mapping_key(mapping: dict) -> tuple[str, str, str]:
+    return (
+        normalize_mapping_path(mapping.get("source_path", "")),
+        normalize_mapping_path(mapping.get("target_path", "")),
+        str(mapping.get("mapping_type", "")),
+    )
 
 
 def _read_dataset(dataset_dir: Path, max_samples: int) -> list[dict]:
@@ -33,13 +41,37 @@ def _validate_mapping(mapping: dict, seen_keys: set[tuple[str, str, str]]) -> tu
     if float(record.confidence) < 0.5:
         violations.append({"type": "confidence_low", "message": f"confidence too low: {record.confidence}"})
 
-    dedup_key = (normalize_mapping_path(record.source_path), normalize_mapping_path(record.target_path), str(record.mapping_type))
+    dedup_key = _mapping_key(record.model_dump())
     if dedup_key in seen_keys:
         violations.append({"type": "duplicate_mapping", "message": f"Duplicate mapping key: {dedup_key}"})
     else:
         seen_keys.add(dedup_key)
 
     return (len(violations) == 0), violations, record.model_dump()
+
+
+def _deduplicate_and_sort_mappings(mappings: list[dict]) -> list[dict]:
+    best_by_key: dict[tuple[str, str, str], dict] = {}
+    for mapping in mappings:
+        key = _mapping_key(mapping)
+        current = best_by_key.get(key)
+        if current is None or float(mapping.get("confidence", 0.0)) > float(current.get("confidence", 0.0)):
+            best_by_key[key] = mapping
+    return [best_by_key[key] for key in sorted(best_by_key)]
+
+
+def _extract_cardinality_contract(row: dict) -> dict:
+    contract = row.get("cardinality_contract") or {}
+    mode = str(contract.get("mode") or "one_to_one")
+    grouped_1 = bool(contract.get("grouped_1", mode == "grouped_1"))
+    expected_count = contract.get("expected_count")
+    if expected_count is None:
+        expected_count = 1 if not grouped_1 else 0
+    return {
+        "mode": mode,
+        "grouped_1": grouped_1,
+        "expected_count": int(expected_count),
+    }
 
 
 def main() -> None:
@@ -69,7 +101,7 @@ def main() -> None:
     cfg = TranslatorConfig(model_name=cfg_data.get("model_name", model_name), seed=cfg_data.get("seed", seed))
     translator = Translator(cfg)
 
-    mapping_lines: list[str] = []
+    mapping_records: list[dict] = []
     validations: list[dict] = []
     llm_bugs: list[dict] = []
     dataset_rows = _read_dataset(dataset_dir, max_samples)
@@ -84,6 +116,8 @@ def main() -> None:
         else:
             sample_path = dataset_dir.parent / "opcua" / "synthetic" / f"opcua_{idx - 1:03d}.xml"
 
+        contract = _extract_cardinality_contract(row)
+
         log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
         result = translator.translate("opcua", "aas", str(sample_path), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
         llm_error = (result.provenance.metadata or {}).get("llm_error") if result.provenance else None
@@ -91,6 +125,7 @@ def main() -> None:
             llm_bugs.append({"sample": sample_path.name, "mode": mode, "error": llm_error})
 
         item_violations: list[dict] = []
+        sample_mappings: list[dict] = []
         if result.mappings:
             for m in result.mappings:
                 record = m.model_dump()
@@ -98,7 +133,7 @@ def main() -> None:
                 if not is_valid:
                     item_violations.extend(violations)
                 if normalized is not None:
-                    mapping_lines.append(json.dumps(normalized))
+                    sample_mappings.append(normalized)
         else:
             fallback = {
                 "source_path": normalize_mapping_path(row.get("mapping_source_path", f"opcua://ns=2;i={1000 + idx - 1}")),
@@ -111,10 +146,26 @@ def main() -> None:
             _, violations, normalized = _validate_mapping(fallback, seen_keys)
             item_violations.extend(violations)
             if normalized is not None:
-                mapping_lines.append(json.dumps(normalized))
+                sample_mappings.append(normalized)
+
+        sample_mappings = _deduplicate_and_sort_mappings(sample_mappings)
+
+        expected_count = contract["expected_count"]
+        if contract["mode"] != "grouped_1" and len(sample_mappings) != expected_count:
+            item_violations.append(
+                {
+                    "type": "cardinality_mismatch",
+                    "message": f"Expected {expected_count} mappings for sample in mode={contract['mode']}, got {len(sample_mappings)}",
+                    "expected_count": expected_count,
+                    "actual_count": len(sample_mappings),
+                    "contract": contract,
+                }
+            )
+
+        mapping_records.extend(sample_mappings)
 
         valid = len(item_violations) == 0
-        validations.append({"valid": valid, "violations": item_violations})
+        validations.append({"valid": valid, "violations": item_violations, "cardinality_contract": contract})
 
         if idx % 5 == 0 or idx == total:
             elapsed = time.perf_counter() - suite_start
@@ -122,6 +173,9 @@ def main() -> None:
             eta = avg * (total - idx)
             pct = (idx / total * 100.0) if total else 100.0
             log(f"Processed {idx}/{total} ({pct:.1f}%) | avg_time_per_item={avg:.3f}s | ETA={eta:.2f}s")
+
+    mapping_records = _deduplicate_and_sort_mappings(mapping_records)
+    mapping_lines = [json.dumps(record) for record in mapping_records]
 
     (output_dir / "mappings.jsonl").write_text("\n".join(mapping_lines) + ("\n" if mapping_lines else ""))
     (output_dir / "validation.json").write_text(json.dumps(validations, indent=2))
