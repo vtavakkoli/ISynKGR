@@ -5,7 +5,7 @@ from typing import Any
 
 from isynkgr.canonical.model import CanonicalEdge, CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import ValidationReport, ValidationViolation
-from isynkgr.icr.entities import Asset, Relationship, Signal, build_asset_path, build_signal_path
+from isynkgr.icr.entities import Asset, Signal, build_asset_path, build_signal_path
 
 _ALLOWED_DTYPES = {"BOOL", "INT", "FLOAT", "STRING"}
 _NUMERIC_DTYPES = {"INT", "FLOAT"}

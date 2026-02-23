@@ -5,7 +5,7 @@ from xml.etree import ElementTree as ET
 
 from isynkgr.canonical.model import CanonicalEdge, CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import ValidationReport, ValidationViolation
-from isynkgr.icr.entities import Endpoint, Relationship, build_endpoint_path
+from isynkgr.icr.entities import Endpoint, build_endpoint_path
 
 UA_TYPES = {"UAObjectType", "UAVariable", "UADataType"}
 
