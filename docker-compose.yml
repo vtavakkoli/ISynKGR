@@ -12,7 +12,12 @@ services:
       TIER: ${TIER:-canonical}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: ["python", "-u", "-m", "benchmark.sample_validate"]
+    command:
+      [
+        "bash",
+        "-lc",
+        "set -o pipefail; python -u -m benchmark.sample_validate | tee results/sample_validation/sample_validate.log",
+      ]
     volumes:
       - ./:/app
       - ./results:/app/results
@@ -32,7 +37,12 @@ services:
       TIER: ${TIER:-canonical}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: ["python", "-u", "-m", "benchmark.orchestrate"]
+    command:
+      [
+        "bash",
+        "-lc",
+        "set -o pipefail; python -u -m benchmark.orchestrate | tee results/full_run.log",
+      ]
     volumes:
       - ./:/app
       - ./results:/app/results
@@ -52,7 +62,12 @@ services:
       TIER: ${TIER:-canonical}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: ["python", "-u", "-m", "benchmark.run", "--scenario", "baseline", "--out", "results/baseline"]
+    command:
+      [
+        "bash",
+        "-lc",
+        "set -o pipefail; python -u -m benchmark.run --scenario baseline --out results/baseline | tee results/baseline/run_scenario.log",
+      ]
     volumes:
       - ./:/app
       - ./results:/app/results
