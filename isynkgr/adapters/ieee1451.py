@@ -5,6 +5,7 @@ from typing import Any
 
 from isynkgr.canonical.model import CanonicalEdge, CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import ValidationReport, ValidationViolation
+from isynkgr.icr.entities import Asset, Relationship, Sensor, build_asset_path, build_sensor_path
 
 _ALLOWED_DTYPES = {"BOOL", "INT", "FLOAT", "STRING"}
 _NUMERIC_DTYPES = {"INT", "FLOAT"}
@@ -27,28 +28,32 @@ class IEEE1451Adapter:
             tid = teds.get("id", "")
             if not tid:
                 continue
-            model.nodes.append(CanonicalNode(id=tid, type="TEDS", label=teds.get("name"), attributes={"meta": teds.get("meta", {})}))
+            ted_asset = Asset(id=tid, path=build_asset_path(self.name, tid), protocol=self.name, label=teds.get("name"), metadata={"meta": teds.get("meta", {}), "raw_id": tid})
+            model.nodes.append(CanonicalNode(id=ted_asset.path, type="TEDS", label=teds.get("name"), attributes=ted_asset.model_dump()))
             for channel in teds.get("channels", []):
                 cid = channel.get("id", "")
                 if not cid:
                     continue
-                channel_node_id = f"{tid}/{cid}"
+                channel_node_id = build_sensor_path(self.name, tid, cid)
                 attrs = {
                     "channel_id": cid,
                     "dtype": channel.get("dtype"),
                     "unit": channel.get("unit"),
                     "range": channel.get("range"),
                 }
-                model.nodes.append(CanonicalNode(id=channel_node_id, type="Channel", label=channel.get("name"), attributes=attrs))
-                model.edges.append(CanonicalEdge(source=tid, target=channel_node_id, relation="hasChannel"))
+                sensor = Sensor(id=cid, path=channel_node_id, protocol=self.name, label=channel.get("name"), metadata=attrs)
+                model.nodes.append(CanonicalNode(id=sensor.path, type="Channel", label=sensor.label, attributes=sensor.model_dump()))
+                rel = Relationship(source_path=ted_asset.path, target_path=channel_node_id, relation="hasChannel")
+                model.edges.append(CanonicalEdge(source=rel.source_path, target=rel.target_path, relation=rel.relation))
         return model
 
     def serialize(self, model: CanonicalModel, mappings: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         teds_docs: dict[str, dict[str, Any]] = {}
         for node in model.nodes:
             if node.type == "TEDS":
+                raw_id = (node.attributes or {}).get("metadata", {}).get("raw_id") or (node.attributes or {}).get("raw_id") or node.id
                 teds_docs[node.id] = {
-                    "id": node.id,
+                    "id": raw_id,
                     "name": node.label,
                     "meta": (node.attributes or {}).get("meta", {}),
                     "channels": [],
@@ -61,13 +66,14 @@ class IEEE1451Adapter:
             if channel is None:
                 continue
             attrs = channel.attributes or {}
+            meta = attrs.get("metadata", attrs)
             teds_docs[edge.source]["channels"].append(
                 {
-                    "id": attrs.get("channel_id") or channel.id.rsplit("/", 1)[-1],
+                    "id": meta.get("channel_id") or channel.id.rsplit("/", 2)[-2],
                     "name": channel.label,
-                    "dtype": attrs.get("dtype"),
-                    "unit": attrs.get("unit"),
-                    "range": attrs.get("range"),
+                    "dtype": meta.get("dtype"),
+                    "unit": meta.get("unit"),
+                    "range": meta.get("range"),
                 }
             )
 

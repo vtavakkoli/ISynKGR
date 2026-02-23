@@ -5,6 +5,7 @@ from typing import Any
 
 from isynkgr.canonical.model import CanonicalEdge, CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import ValidationReport, ValidationViolation
+from isynkgr.icr.entities import Asset, Relationship, Signal, build_asset_path, build_signal_path
 
 _ALLOWED_DTYPES = {"BOOL", "INT", "FLOAT", "STRING"}
 _NUMERIC_DTYPES = {"INT", "FLOAT"}
@@ -27,19 +28,20 @@ class IEC61499Adapter:
             did = device.get("id", "")
             if not did:
                 continue
-            model.nodes.append(CanonicalNode(id=did, type="Device", label=device.get("name")))
+            device_asset = Asset(id=did, path=build_asset_path(self.name, did), protocol=self.name, label=device.get("name"), metadata={"raw_id": did})
+            model.nodes.append(CanonicalNode(id=device_asset.path, type="Device", label=device.get("name"), attributes=device_asset.model_dump()))
             for resource in device.get("resources", []):
                 rid = resource.get("id", "")
                 if not rid:
                     continue
-                resource_node_id = f"{did}/{rid}"
+                resource_node_id = build_signal_path(self.name, f"{did}/{rid}", "resource")
                 model.nodes.append(CanonicalNode(id=resource_node_id, type="Resource", label=resource.get("name"), attributes={"resource_id": rid}))
-                model.edges.append(CanonicalEdge(source=did, target=resource_node_id, relation="hasResource"))
+                model.edges.append(CanonicalEdge(source=device_asset.path, target=resource_node_id, relation="hasResource"))
                 for fb in resource.get("function_blocks", []):
                     fbid = fb.get("id", "")
                     if not fbid:
                         continue
-                    fb_node_id = f"{resource_node_id}/{fbid}"
+                    fb_node_id = build_signal_path(self.name, f"{did}/{rid}/{fbid}", "fb")
                     model.nodes.append(CanonicalNode(id=fb_node_id, type="FunctionBlock", label=fb.get("name"), attributes={"fb_type": fb.get("type"), "fb_id": fbid}))
                     model.edges.append(CanonicalEdge(source=resource_node_id, target=fb_node_id, relation="hasFunctionBlock"))
                     for direction in ("inputs", "outputs"):
@@ -47,7 +49,7 @@ class IEC61499Adapter:
                             sid = signal.get("id", "")
                             if not sid:
                                 continue
-                            signal_node_id = f"{fb_node_id}/{sid}"
+                            signal_node_id = build_signal_path(self.name, f"{did}/{rid}/{fbid}", sid)
                             attrs = {
                                 "direction": direction[:-1],
                                 "signal_id": sid,
@@ -55,7 +57,8 @@ class IEC61499Adapter:
                                 "unit": signal.get("unit"),
                                 "range": signal.get("range"),
                             }
-                            model.nodes.append(CanonicalNode(id=signal_node_id, type="Signal", label=signal.get("name"), attributes=attrs))
+                            signal_entity = Signal(id=sid, path=signal_node_id, protocol=self.name, label=signal.get("name"), metadata=attrs)
+                            model.nodes.append(CanonicalNode(id=signal_entity.path, type="Signal", label=signal.get("name"), attributes=signal_entity.model_dump()))
                             model.edges.append(CanonicalEdge(source=fb_node_id, target=signal_node_id, relation=f"has{direction[:-1].capitalize()}"))
         return model
 
@@ -63,7 +66,8 @@ class IEC61499Adapter:
         devices: dict[str, dict[str, Any]] = {}
         for node in model.nodes:
             if node.type == "Device":
-                devices[node.id] = {"id": node.id, "name": node.label, "resources": []}
+                raw_id = (node.attributes or {}).get("metadata", {}).get("raw_id") or (node.attributes or {}).get("raw_id") or node.id
+                devices[node.id] = {"id": raw_id, "name": node.label, "resources": []}
 
         resource_index: dict[str, tuple[str, dict[str, Any]]] = {}
         for edge in model.edges:
@@ -71,7 +75,9 @@ class IEC61499Adapter:
                 resource = next((n for n in model.nodes if n.id == edge.target and n.type == "Resource"), None)
                 if resource is None:
                     continue
-                rid = (resource.attributes or {}).get("resource_id") or resource.id.rsplit("/", 1)[-1]
+                rattrs = resource.attributes or {}
+                rmeta = rattrs.get("metadata", rattrs)
+                rid = rmeta.get("resource_id") or resource.id.rsplit("/", 1)[-1]
                 resource_doc = {"id": rid, "name": resource.label, "function_blocks": []}
                 devices[edge.source]["resources"].append(resource_doc)
                 resource_index[resource.id] = (edge.source, resource_doc)
@@ -82,11 +88,13 @@ class IEC61499Adapter:
                 fb = next((n for n in model.nodes if n.id == edge.target and n.type == "FunctionBlock"), None)
                 if fb is None:
                     continue
-                fbid = (fb.attributes or {}).get("fb_id") or fb.id.rsplit("/", 1)[-1]
+                fattrs = fb.attributes or {}
+                fmeta = fattrs.get("metadata", fattrs)
+                fbid = fmeta.get("fb_id") or fb.id.rsplit("/", 1)[-1]
                 fb_doc = {
                     "id": fbid,
                     "name": fb.label,
-                    "type": (fb.attributes or {}).get("fb_type"),
+                    "type": fmeta.get("fb_type"),
                     "inputs": [],
                     "outputs": [],
                 }
@@ -103,12 +111,13 @@ class IEC61499Adapter:
             if signal is None:
                 continue
             attrs = signal.attributes or {}
+            meta = attrs.get("metadata", attrs)
             sig_doc = {
-                "id": attrs.get("signal_id") or signal.id.rsplit("/", 1)[-1],
+                "id": meta.get("signal_id") or signal.id.rsplit("/", 1)[-1],
                 "name": signal.label,
-                "dtype": attrs.get("dtype"),
-                "unit": attrs.get("unit"),
-                "range": attrs.get("range"),
+                "dtype": meta.get("dtype"),
+                "unit": meta.get("unit"),
+                "range": meta.get("range"),
             }
             if edge.relation == "hasInput":
                 fb_index[edge.source]["inputs"].append(sig_doc)

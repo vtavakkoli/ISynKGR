@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from isynkgr.icr.entities import normalize_path
 from isynkgr.icr.path_validation import validate_protocol_path
 
 
@@ -25,18 +25,8 @@ class MappingTransformOp(str, Enum):
 
 
 def normalize_mapping_path(path: str) -> str:
-    value = (path or "").strip().replace("\\", "/")
-    if value.startswith("./"):
-        value = value[2:]
+    return normalize_path(path)
 
-    protocol, sep, rest = value.partition("://")
-    if sep:
-        rest = re.sub(r"/+", "/", rest)
-        value = f"{protocol.lower()}://{rest}"
-    else:
-        value = re.sub(r"/+", "/", value)
-
-    return value.rstrip("/")
 
 
 @dataclass

@@ -7,6 +7,7 @@ from typing import Any
 
 from isynkgr.canonical.model import CanonicalEdge, CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import ValidationReport, ValidationViolation
+from isynkgr.icr.entities import Asset, Relationship, Sensor, build_asset_path, build_sensor_path
 
 
 class AASAdapter:
@@ -31,24 +32,32 @@ class AASAdapter:
         for aas in doc.get("assetAdministrationShells", []):
             aid = aas.get("id", "")
             if aid:
-                m.nodes.append(CanonicalNode(id=aid, type="AssetAdministrationShell", label=aas.get("idShort")))
+                asset = Asset(id=aid, path=build_asset_path(self.name, aid), protocol=self.name, label=aas.get("idShort"), metadata={"raw_id": aid})
+                m.nodes.append(CanonicalNode(id=asset.path, type="AssetAdministrationShell", label=asset.label, attributes=asset.model_dump()))
             for ref in aas.get("submodels", []):
                 sid = ref.get("keys", [{}])[-1].get("value")
                 if aid and sid:
-                    m.edges.append(CanonicalEdge(source=aid, target=sid, relation="hasSubmodel"))
+                    rel = Relationship(source_path=build_asset_path(self.name, aid), target_path=build_sensor_path(self.name, aid, sid), relation="hasSubmodel")
+                    m.edges.append(CanonicalEdge(source=rel.source_path, target=rel.target_path, relation=rel.relation))
         for sm in doc.get("submodels", []):
             sid = sm.get("id", "")
-            m.nodes.append(CanonicalNode(id=sid, type="Submodel", label=sm.get("idShort")))
+            sm_path = build_sensor_path(self.name, sid or "default", sid or "submodel")
+            m.nodes.append(CanonicalNode(id=sm_path, type="Submodel", label=sm.get("idShort"), attributes={"raw_id": sid}))
             for elem in sm.get("submodelElements", []):
-                eid = f"{sid}:{elem.get('idShort','element')}"
-                m.nodes.append(CanonicalNode(id=eid, type=elem.get("modelType", "Property"), label=elem.get("idShort"), attributes={"valueType": elem.get("valueType"), "value": elem.get("value")}))
-                m.edges.append(CanonicalEdge(source=sid, target=eid, relation="hasElement"))
+                eid = elem.get("idShort", "element")
+                sensor = Sensor(id=eid, path=build_sensor_path(self.name, sid or "default", eid), protocol=self.name, label=eid, metadata={"valueType": elem.get("valueType"), "value": elem.get("value"), "submodel_id": sid})
+                m.nodes.append(CanonicalNode(id=sensor.path, type=elem.get("modelType", "Property"), label=sensor.label, attributes=sensor.model_dump()))
+                m.edges.append(CanonicalEdge(source=sm_path, target=sensor.path, relation="hasElement"))
         return m
 
     def serialize(self, model: CanonicalModel, mappings: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         shells = [n for n in model.nodes if n.type == "AssetAdministrationShell"]
         submodels = [n for n in model.nodes if n.type == "Submodel"]
-        return {"assetAdministrationShells": [{"id": s.id, "idShort": s.label or s.id} for s in shells], "submodels": [{"id": sm.id, "idShort": sm.label or sm.id, "submodelElements": []} for sm in submodels], "mappings": mappings or []}
+        return {
+            "assetAdministrationShells": [{"id": (s.attributes or {}).get("raw_id", s.id), "idShort": s.label or s.id} for s in shells],
+            "submodels": [{"id": (sm.attributes or {}).get("raw_id", sm.id), "idShort": sm.label or sm.id, "submodelElements": []} for sm in submodels],
+            "mappings": mappings or [],
+        }
 
     def validate(self, raw: str | bytes | dict[str, Any]) -> ValidationReport:
         violations: list[ValidationViolation] = []
