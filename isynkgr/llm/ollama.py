@@ -45,7 +45,7 @@ class OllamaClient:
     def complete_json(self, prompt: str, schema_name: str, seed: int) -> dict:
         key = stable_hash({"m": self.model, "p": prompt, "s": schema_name, "seed": seed})
         cached = self.cache.get(key)
-        if cached:
+        if cached and not cached.get("_llm_error"):
             self.last_error = cached.get("_llm_error")
             return cached
 
@@ -81,5 +81,4 @@ class OllamaClient:
         }
         parsed = {"mappings": [], "_llm_error": llm_error}
         self.last_error = llm_error
-        self.cache.set(key, parsed)
         return parsed
