@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from isynkgr.llm.ollama import OllamaClient
@@ -22,30 +23,37 @@ class _FakeResponse:
 
 
 def test_complete_json_ignores_cached_llm_errors_and_retries(monkeypatch: pytest.MonkeyPatch, tmp_path):
-    cache = JsonCache(root=str(tmp_path))
+    cache = JsonCache(root=str(tmp_path / "cache"))
+    log_path = tmp_path / "ollama_io.jsonl"
+    monkeypatch.setenv("OLLAMA_IO_LOG", str(log_path))
     client = OllamaClient(model="demo", base_url="http://example", cache=cache)
 
     key = "test-key"
     monkeypatch.setattr("isynkgr.llm.ollama.stable_hash", lambda _: key)
     cache.set(key, {"mappings": [], "_llm_error": {"type": "llm_request_failed"}})
 
-    calls = {"n": 0}
+    calls: list[str] = []
 
     def _fake_urlopen(req, timeout=0):  # noqa: ANN001
-        calls["n"] += 1
+        calls.append(req.full_url)
         return _FakeResponse({"response": json.dumps({"mappings": [{"source_path": "opcua://x", "target_path": "aas://y", "mapping_type": "equivalent"}]})})
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
 
     result = client.complete_json("prompt", "MappingList", 42)
 
-    assert calls["n"] == 1
+    assert calls == ["http://example/api/generate"]
     assert len(result["mappings"]) == 1
     assert cache.get(key) == result
 
+    events = [json.loads(line)["event"] for line in log_path.read_text().splitlines()]
+    assert "request" in events and "response" in events
+
 
 def test_complete_json_does_not_cache_failed_calls(monkeypatch: pytest.MonkeyPatch, tmp_path):
-    cache = JsonCache(root=str(tmp_path))
+    cache = JsonCache(root=str(tmp_path / "cache"))
+    log_path = tmp_path / "ollama_io.jsonl"
+    monkeypatch.setenv("OLLAMA_IO_LOG", str(log_path))
     client = OllamaClient(model="demo", base_url="http://example", cache=cache)
 
     key = "test-key-2"
@@ -60,3 +68,4 @@ def test_complete_json_does_not_cache_failed_calls(monkeypatch: pytest.MonkeyPat
 
     assert result.get("_llm_error", {}).get("type") == "llm_request_failed"
     assert cache.get(key) is None
+    assert any(json.loads(line)["event"] == "error" for line in log_path.read_text().splitlines())
