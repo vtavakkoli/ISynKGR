@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from isynkgr.icr.entities import build_endpoint_path
-from isynkgr.icr.mapping_schema import MappingRecord, MappingType, MappingTransform
+from isynkgr.icr.mapping_schema import MappingRecord, MappingType
 from isynkgr.icr.entities import normalize_path
 from isynkgr.icr.path_validation import detect_path_protocol, validate_protocol_path
 
