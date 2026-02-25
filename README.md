@@ -23,41 +23,50 @@ Industrial interoperability projects fail when translation quality is hard to me
 ## Architecture
 
 ```mermaid
-flowchart TD
-    %% Define Custom Colors and Styles (Material Design Palette)
-    classDef input fill:#e0f7fa,stroke:#00bcd4,stroke-width:2px,color:#006064,rx:5,ry:5
-    classDef core fill:#ede7f6,stroke:#673ab7,stroke-width:2px,color:#311b92,rx:5,ry:5
-    classDef engine fill:#fff3e0,stroke:#ff9800,stroke-width:2px,color:#e65100,rx:5,ry:5
-    classDef merge fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px,color:#1a237e,rx:5,ry:5
-    classDef out fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#1b5e20,rx:5,ry:5
-    classDef metric fill:#fce4ec,stroke:#e91e63,stroke-width:2px,color:#880e4f,rx:5,ry:5
+flowchart LR
+    %% Custom Colors and Styles (Slightly rounder corners rx:8 for a modern card look)
+    classDef input fill:#e0f7fa,stroke:#00bcd4,stroke-width:2px,color:#006064,rx:8,ry:8
+    classDef core fill:#ede7f6,stroke:#673ab7,stroke-width:2px,color:#311b92,rx:8,ry:8
+    classDef engine fill:#fff3e0,stroke:#ff9800,stroke-width:2px,color:#e65100,rx:8,ry:8
+    classDef merge fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px,color:#1a237e,rx:8,ry:8
+    classDef out fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#1b5e20,rx:8,ry:8
+    classDef metric fill:#fce4ec,stroke:#e91e63,stroke-width:2px,color:#880e4f,rx:8,ry:8
 
-    %% Nodes and Connections
-    A["📥 Input Artifacts<br>AAS / OPC UA / IEC61499 / IEEE1451"]:::input --> B["🔌 Adapters<br>isynkgr/adapters"]:::core
-    B --> C["📦 Canonical Model<br>isynkgr/canonical"]:::core
+    %% 1. Ingestion (Left Side)
+    A["📥 Inputs<br><small>AAS / OPC UA<br>IEC61499 / IEEE1451</small>"]:::input
+    B["🔌 Adapters<br><small>isynkgr/adapters</small>"]:::core
+    C["📦 Canonical Model<br><small>isynkgr/canonical</small>"]:::core
 
+    A --> B --> C
+
+    %% 2. Processing (Middle)
     subgraph Processing["⚙️ Processing Engines"]
-        D1["📜 Rule Engine<br>isynkgr/rules"]:::engine
-        D2["🔍 Retrieval<br>vector + GraphRAG"]:::engine
-        D3["🤖 LLM Integration<br>Ollama client"]:::engine
+        D1["📜 Rule Engine<br><small>isynkgr/rules</small>"]:::engine
+        D2["🔍 Retrieval<br><small>vector + GraphRAG</small>"]:::engine
+        D3["🤖 LLM Integration<br><small>Ollama client</small>"]:::engine
     end
 
-    C --> D1
-    C --> D2
-    C --> D3
+    C --> D1 & D2 & D3
 
-    D1 --> E["🔀 Pipeline Variants"]:::merge
-    D2 --> E
-    D3 --> E
+    E["🔀 Pipeline<br>Variants"]:::merge
+    D1 & D2 & D3 --> E
 
-    E --> F["📤 Translation Output<br>Mappings + Entities"]:::out
-    F --> G["✅ Validation Layer<br>Schema + Path checks"]:::out
-    G --> H["📊 Benchmark/Evaluation<br>metrics + reports"]:::metric
+    %% 3. Output Pipeline (Right Side - Folded vertically for compactness!)
+    subgraph Delivery["🏁 Delivery & Evaluation"]
+        direction TB
+        F["📤 Translation<br><small>Mappings + Entities</small>"]:::out
+        G["✅ Validation<br><small>Schema + Path</small>"]:::out
+        H["📊 Evaluation<br><small>Metrics + Reports</small>"]:::metric
+        I["📄 Final Artifacts<br><small>JSON + MD + Charts</small>"]:::metric
+        
+        F --> G --> H --> I
+    end
 
-    H --> I["📄 Final Artifacts<br>JSON + Markdown + charts"]:::metric
+    E --> F
 
-    %% Subgraph Styling (Light gray, dashed border, rounded corners)
-    style Processing fill:#f5f5f5,stroke:#9e9e9e,stroke-width:2px,stroke-dasharray: 5 5,rx:10,ry:10
+    %% Subgraph Styling
+    style Processing fill:#f5f5f5,stroke:#bdbdbd,stroke-width:2px,stroke-dasharray: 4 4,rx:10,ry:10
+    style Delivery fill:#f5f5f5,stroke:#bdbdbd,stroke-width:2px,stroke-dasharray: 4 4,rx:10,ry:10
 ```
 
 ### Pipeline modes
