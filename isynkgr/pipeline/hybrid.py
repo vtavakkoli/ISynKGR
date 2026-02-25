@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
-
+from typing import Any, Literal
 
 from isynkgr.adapters.aas import AASAdapter
-from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.adapters.iec61499 import IEC61499Adapter
 from isynkgr.adapters.ieee1451 import IEEE1451Adapter
+from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.canonical.model import CanonicalModel
 from isynkgr.canonical.schemas import Mapping, Provenance, TranslationResult
-from isynkgr.icr.mapping_schema import ingest_mapping_payload
+from isynkgr.icr.mapping_output_contract import normalize_mapping_item, normalize_mapping_items
 from isynkgr.llm.ollama import OllamaClient
+from isynkgr.pipeline.prompting import build_mapping_prompt
 from isynkgr.retrieval.graphrag import GraphRAGRetriever
 from isynkgr.rules.engine import RuleEngine
 from isynkgr.utils.hashing import stable_hash
@@ -47,6 +47,15 @@ def _git_commit() -> str:
     return ref[:12]
 
 
+def _schema_summary(model: CanonicalModel) -> dict[str, Any]:
+    return {
+        "standard": model.standard,
+        "node_count": len(model.nodes),
+        "edge_count": len(model.edges),
+        "namespaces": list(model.namespaces.keys())[:10],
+    }
+
+
 @dataclass
 class HybridPipeline:
     llm: OllamaClient
@@ -60,19 +69,50 @@ class HybridPipeline:
         evidence = self.retriever.retrieve(source_model, target_standard) if mode in {"hybrid", "rag_only", "graph_only"} else []
 
         mappings: list[Mapping] = []
+        rejected: list[dict[str, Any]] = []
+        llm_raw_output: list[dict[str, Any]] = []
+
         if mode in {"hybrid", "rule_only"}:
-            mappings.extend(self.rules.apply_rules(source_model, None))
+            rule_mappings = self.rules.apply_rules(source_model, target_standard)
+            rule_report = normalize_mapping_items([m.model_dump() for m in rule_mappings], source_standard, target_standard, method="rule")
+            mappings.extend(rule_report.accepted)
+            rejected.extend([item.model_dump() for item in rule_report.rejected])
 
         llm_error = None
         if mode in {"hybrid", "llm_only", "rag_only"}:
-            prompt = f"Map nodes from {source_standard} to {target_standard}. Output JSON with mappings list, each with source_path,target_path,mapping_type,transform,confidence,rationale,evidence. Source nodes:{[n.model_dump() for n in source_model.nodes[:50]]}. Evidence:{[e.model_dump() for e in evidence[:10]]}"
-            raw = self.llm.complete_json(prompt, "MappingList", config.seed)
+            prompt = build_mapping_prompt(
+                source_protocol=source_standard,
+                target_protocol=target_standard,
+                source_schema_summary=_schema_summary(source_model),
+                target_schema_summary={"standard": target_standard},
+                source_model=source_model,
+                evidence=evidence,
+            )
+            raw = self.llm.complete_json(prompt, "MappingOutputContract", config.seed)
+            llm_raw_output.append({"method": mode, "source_protocol": source_standard, "target_protocol": target_standard, "raw": raw})
             llm_error = raw.get("_llm_error")
-            for m in raw.get("mappings", []):
-                try:
-                    mappings.append(ingest_mapping_payload(m, migrate_legacy=True))
-                except Exception:
-                    continue
+            llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
+            mappings.extend(llm_report.accepted)
+            rejected.extend([item.model_dump() for item in llm_report.rejected])
+
+
+        if not mappings:
+            for node in source_model.nodes:
+                mappings.append(
+                    normalize_mapping_item(
+                        {
+                            "source_path": node.id,
+                            "target_path": "",
+                            "mapping_type": "no_match",
+                            "transform": None,
+                            "confidence": 0.0,
+                            "rationale": "No valid mappings were emitted by this method.",
+                            "evidence": [],
+                        },
+                        source_standard,
+                        target_standard,
+                    )
+                )
 
         best_by_key: dict[tuple[str, str, str], Mapping] = {}
         for mapping in mappings:
@@ -86,7 +126,11 @@ class HybridPipeline:
         target_model = CanonicalModel(standard=target_standard, nodes=source_model.nodes, edges=source_model.edges)
         target_artifact = tgt.serialize(target_model, [m.model_dump() for m in mappings])
         validation = tgt.validate(target_artifact)
-        metadata = {"mode": mode}
+        metadata: dict[str, Any] = {
+            "mode": mode,
+            "rejected_mappings": rejected,
+            "llm_raw_output": llm_raw_output,
+        }
         if llm_error is not None:
             metadata["llm_error"] = llm_error
         prov = Provenance(model_name=config.model_name, prompt_hash=stable_hash({"mode": mode, "source": source_standard, "target": target_standard}), seed=config.seed, git_commit=_git_commit(), adapter_versions={"source": "1.0", "target": "1.0"}, metadata=metadata)

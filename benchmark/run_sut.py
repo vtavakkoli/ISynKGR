@@ -5,7 +5,8 @@ import os
 import time
 from pathlib import Path
 
-from isynkgr.icr.mapping_schema import ingest_mapping_payload, normalize_mapping_path
+from isynkgr.icr.mapping_output_contract import validate_mapping_item
+from isynkgr.icr.mapping_schema import MappingType, normalize_mapping_path
 from isynkgr.pipeline.hybrid import TranslatorConfig
 from isynkgr.translator import Translator
 
@@ -31,23 +32,22 @@ def _read_dataset(dataset_dir: Path, max_samples: int) -> list[dict]:
     return [{"id": f.stem, "source_path": str(f)} for i, f in enumerate(opc_files)]
 
 
-def _validate_mapping(mapping: dict, seen_keys: set[tuple[str, str, str]]) -> tuple[bool, list[dict], dict | None]:
+def _validate_mapping(mapping: dict, source_protocol: str, target_protocol: str, seen_keys: set[tuple[str, str, str]]) -> tuple[bool, list[dict], dict | None]:
     violations: list[dict] = []
-    try:
-        record = ingest_mapping_payload(mapping, migrate_legacy=True)
-    except Exception as exc:
-        return False, [{"type": "schema_invalid", "message": str(exc)}], None
+    is_ok, error = validate_mapping_item(mapping, source_protocol=source_protocol, target_protocol=target_protocol)
+    if not is_ok:
+        return False, [{"type": "schema_invalid", "message": error}], None
 
-    if float(record.confidence) < 0.5:
-        violations.append({"type": "confidence_low", "message": f"confidence too low: {record.confidence}"})
+    if float(mapping.get("confidence", 0.0)) < 0.5 and mapping.get("mapping_type") != MappingType.NO_MATCH.value:
+        violations.append({"type": "confidence_low", "message": f"confidence too low: {mapping.get('confidence')}"})
 
-    dedup_key = _mapping_key(record.model_dump())
+    dedup_key = _mapping_key(mapping)
     if dedup_key in seen_keys:
         violations.append({"type": "duplicate_mapping", "message": f"Duplicate mapping key: {dedup_key}"})
     else:
         seen_keys.add(dedup_key)
 
-    return (len(violations) == 0), violations, record.model_dump()
+    return (len(violations) == 0), violations, mapping
 
 
 def _deduplicate_and_sort_mappings(mappings: list[dict]) -> list[dict]:
@@ -77,13 +77,17 @@ def _extract_cardinality_contract(row: dict) -> dict:
 def main() -> None:
     dataset_dir = Path(os.getenv("DATASET_DIR", "/data"))
     output_dir = Path(os.getenv("OUTPUT_DIR", "/out"))
+    predictions_dir = output_dir / "predictions"
     config_path = Path(os.getenv("CONFIG_PATH", "/config/config.json"))
     mode = os.getenv("SUT_MODE", "hybrid")
+    source_protocol = os.getenv("SOURCE_PROTOCOL", "opcua")
+    target_protocol = os.getenv("TARGET_PROTOCOL", "aas")
     max_samples = int(os.getenv("MAX_ITEMS", os.getenv("MAX_SAMPLES", "100")))
     model_name = os.getenv("MODEL_NAME", "qwen3:0.6b")
     seed = int(os.getenv("SEED", "42"))
     tier = os.getenv("TIER", "canonical")
     output_dir.mkdir(parents=True, exist_ok=True)
+    predictions_dir.mkdir(parents=True, exist_ok=True)
 
     progress_log = output_dir / "progress.log"
 
@@ -104,6 +108,8 @@ def main() -> None:
     mapping_records: list[dict] = []
     validations: list[dict] = []
     llm_bugs: list[dict] = []
+    rejected_mappings: list[dict] = []
+    llm_raw_output: list[dict] = []
     dataset_rows = _read_dataset(dataset_dir, max_samples)
     total = len(dataset_rows)
     log(f"[SUITE] stage=translation total={total} completed=0 remaining={total}")
@@ -114,39 +120,43 @@ def main() -> None:
         if source_path:
             sample_path = Path(source_path)
         else:
-            sample_path = dataset_dir.parent / "opcua" / "synthetic" / f"opcua_{idx - 1:03d}.xml"
+            sample_path = dataset_dir.parent / source_protocol / "synthetic" / f"{source_protocol}_{idx - 1:03d}.xml"
 
         contract = _extract_cardinality_contract(row)
 
         log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
-        result = translator.translate("opcua", "aas", str(sample_path), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
-        llm_error = (result.provenance.metadata or {}).get("llm_error") if result.provenance else None
+        result = translator.translate(source_protocol, target_protocol, str(sample_path), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
+        metadata = (result.provenance.metadata or {}) if result.provenance else {}
+        llm_error = metadata.get("llm_error")
         if llm_error:
             llm_bugs.append({"sample": sample_path.name, "mode": mode, "error": llm_error})
 
+        llm_raw_output.extend(metadata.get("llm_raw_output", []))
+        rejected_mappings.extend(metadata.get("rejected_mappings", []))
+
         item_violations: list[dict] = []
         sample_mappings: list[dict] = []
-        if result.mappings:
-            for m in result.mappings:
-                record = m.model_dump()
-                is_valid, violations, normalized = _validate_mapping(record, seen_keys)
-                if not is_valid:
-                    item_violations.extend(violations)
-                if normalized is not None:
-                    sample_mappings.append(normalized)
-        else:
-            fallback = {
-                "source_path": normalize_mapping_path(row.get("mapping_source_path", f"opcua://ns=2;i={1000 + idx - 1}")),
-                "target_path": f"aas://aas-{idx - 1}/submodel/default/element/value",
-                "mapping_type": "fallback",
-                "confidence": 0.2,
-                "rationale": "Fallback mapping generated because model returned no mappings.",
-                "evidence": [],
-            }
-            _, violations, normalized = _validate_mapping(fallback, seen_keys)
-            item_violations.extend(violations)
+        for m in result.mappings:
+            record = m.model_dump()
+            is_valid, violations, normalized = _validate_mapping(record, source_protocol=source_protocol, target_protocol=target_protocol, seen_keys=seen_keys)
+            if not is_valid:
+                item_violations.extend(violations)
             if normalized is not None:
                 sample_mappings.append(normalized)
+
+        if not sample_mappings:
+            source_id = row.get("mapping_source_path", f"{source_protocol}://unknown-{idx - 1}")
+            sample_mappings.append(
+                {
+                    "source_path": normalize_mapping_path(source_id),
+                    "target_path": "",
+                    "mapping_type": "no_match",
+                    "transform": None,
+                    "confidence": 0.0,
+                    "rationale": "No valid mappings were produced by the pipeline.",
+                    "evidence": [],
+                }
+            )
 
         sample_mappings = _deduplicate_and_sort_mappings(sample_mappings)
 
@@ -177,10 +187,22 @@ def main() -> None:
     mapping_records = _deduplicate_and_sort_mappings(mapping_records)
     mapping_lines = [json.dumps(record) for record in mapping_records]
 
+    errors_summary = {
+        "mode": mode,
+        "source_protocol": source_protocol,
+        "target_protocol": target_protocol,
+        "rejected_count": len(rejected_mappings),
+        "llm_error_count": len(llm_bugs),
+        "validation_invalid_count": sum(1 for v in validations if not v.get("valid")),
+    }
+
     (output_dir / "mappings.jsonl").write_text("\n".join(mapping_lines) + ("\n" if mapping_lines else ""))
     (output_dir / "validation.json").write_text(json.dumps(validations, indent=2))
     (output_dir / "provenance.json").write_text(json.dumps({"mode": mode, "dataset": str(dataset_dir), "llm_bug_count": len(llm_bugs)}, indent=2))
     (output_dir / "bugs.json").write_text(json.dumps(llm_bugs, indent=2))
+    (predictions_dir / "rejected_mappings.jsonl").write_text("\n".join(json.dumps(row) for row in rejected_mappings) + ("\n" if rejected_mappings else ""))
+    (predictions_dir / "llm_raw_output.jsonl").write_text("\n".join(json.dumps(row) for row in llm_raw_output) + ("\n" if llm_raw_output else ""))
+    (predictions_dir / "errors_summary.json").write_text(json.dumps(errors_summary, indent=2))
 
     suite_elapsed = time.perf_counter() - suite_start
     throughput = (total / suite_elapsed) if suite_elapsed > 0 else 0.0

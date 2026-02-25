@@ -11,9 +11,9 @@ from isynkgr.icr.path_validation import validate_protocol_path
 class MappingType(str, Enum):
     EQUIVALENT = "equivalent"
     APPROXIMATE = "approximate"
-    FALLBACK = "fallback"
     LABEL_MATCH = "label_match"
     TRANSFORM = "transform"
+    NO_MATCH = "no_match"
 
 
 class MappingTransformOp(str, Enum):
@@ -72,11 +72,7 @@ class MappingRecord:
 
         if not self.source_path:
             raise ValueError("source_path is required")
-        if not self.target_path:
-            raise ValueError("target_path is required")
-
         validate_protocol_path(self.source_path, "source_path")
-        validate_protocol_path(self.target_path, "target_path")
 
         if not isinstance(self.mapping_type, MappingType):
             self.mapping_type = MappingType(str(self.mapping_type))
@@ -93,6 +89,16 @@ class MappingRecord:
         if not isinstance(self.evidence, list):
             raise ValueError("evidence must be a list")
         self.evidence = [str(x) for x in self.evidence]
+
+        if self.mapping_type == MappingType.NO_MATCH:
+            if self.target_path:
+                raise ValueError("target_path must be empty when mapping_type='no_match'")
+            if self.transform is not None:
+                raise ValueError("transform must be null when mapping_type='no_match'")
+        else:
+            if not self.target_path:
+                raise ValueError("target_path is required unless mapping_type='no_match'")
+            validate_protocol_path(self.target_path, "target_path")
 
         if self.mapping_type == MappingType.TRANSFORM:
             if self.transform is None:

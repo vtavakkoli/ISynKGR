@@ -28,11 +28,11 @@ def _run_local_baseline(mode: str, out_dir: Path) -> None:
                 json.dumps(
                     {
                         "source_path": f"opcua://ns=2;i={1000+idx}",
-                        "target_path": f"aas://aas-{idx}/submodel/default/element/value",
-                        "mapping_type": "fallback",
+                        "target_path": "",
+                        "mapping_type": "no_match",
                         "transform": None,
-                        "confidence": 0.2,
-                        "rationale": "Fallback mapping from report runner.",
+                        "confidence": 0.0,
+                        "rationale": "No mappings produced by report runner.",
                         "evidence": [],
                     }
                 )
