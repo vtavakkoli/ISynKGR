@@ -22,7 +22,8 @@ Industrial interoperability projects fail when translation quality is hard to me
 
 ## Architecture
 
-```mermaidflowchart TD
+```mermaid
+flowchart TD
     %% Define Custom Colors and Styles (Material Design Palette)
     classDef input fill:#e0f7fa,stroke:#00bcd4,stroke-width:2px,color:#006064,rx:5,ry:5
     classDef core fill:#ede7f6,stroke:#673ab7,stroke-width:2px,color:#311b92,rx:5,ry:5
