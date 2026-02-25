@@ -58,8 +58,8 @@ def validate_protocol_path(path: str, field_name: str = "path") -> None:
         )
     pattern = PROTOCOL_PATH_PATTERNS.get(protocol)
     if pattern is None:
-        raise ValueError(
-            f"{field_name} protocol '{protocol}' is unsupported (supported: {', '.join(get_supported_path_protocols())})"
-        )
+        if not value.split("://", 1)[1]:
+            raise ValueError(f"{field_name} must include non-empty path after protocol prefix")
+        return
     if not pattern.fullmatch(value):
         raise ValueError(f"{field_name} does not match required '{protocol}' path format")

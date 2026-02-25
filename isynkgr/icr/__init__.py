@@ -10,6 +10,7 @@ from isynkgr.icr.entities import (
     build_signal_path,
     normalize_path,
 )
+from isynkgr.icr.mapping_output_contract import normalize_mapping_item, validate_mapping_item
 from isynkgr.icr.mapping_schema import (
     MappingRecord,
     MappingTransform,
@@ -36,4 +37,6 @@ __all__ = [
     "MappingType",
     "ingest_mapping_payload",
     "normalize_mapping_path",
+    "normalize_mapping_item",
+    "validate_mapping_item",
 ]
