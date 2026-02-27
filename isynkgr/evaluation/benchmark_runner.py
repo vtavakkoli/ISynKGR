@@ -1,22 +1,17 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import statistics
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-try:
-    import matplotlib.pyplot as plt
-except Exception:
-    plt = None
-
-from isynkgr.common import STANDARDS, read_jsonl
-from isynkgr.llm_integration.ollama_client import OllamaClient
+from isynkgr.common import read_jsonl
+from isynkgr.evaluation.components import build_graph, build_pairs, load_standards, predict_name, save_outputs, score
+from isynkgr.llm.ollama import OllamaClient
 from isynkgr.retrieval.graphrag import GraphRAGRetriever
 from isynkgr.translation_logic.library import TranslationLogicLibrary
 
@@ -24,48 +19,6 @@ from isynkgr.translation_logic.library import TranslationLogicLibrary
 def log_progress(stage: str, message: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     print(f"[{ts}] [{stage}] {message}", flush=True)
-
-
-
-
-def load_standards(config_path: Path | None) -> list[str]:
-    if config_path is None:
-        return list(STANDARDS.keys())
-    data = json.loads(config_path.read_text())
-    standards = data.get("standards", [])
-    if not standards:
-        raise ValueError(f"No standards found in config: {config_path}")
-    return list(standards)
-
-
-def build_pairs(standards: Iterable[str]) -> list[tuple[str, str]]:
-    standards = list(standards)
-    return [(source, target) for source in standards for target in standards if source != target]
-
-def build_graph(sample: dict[str, Any]) -> dict[str, Any]:
-    entity = sample["entities"][0]["id"]
-    nodes = [{"id": entity, "label": entity, "synonyms": sample["terms"]}]
-    edges = []
-    for p in sample["properties"]:
-        pid = f"{entity}:{p['name']}"
-        nodes.append({"id": pid, "label": p["name"], "synonyms": [f"{p['name']}_alias"]})
-        edges.append({"source": entity, "target": pid, "predicate": "hasProperty"})
-    return {"nodes": nodes, "edges": edges}
-
-
-def predict_name(sample: dict, target: str, method: str) -> str:
-    source = sample["standard"]
-    base = sample["entities"][0]["id"]
-    if method in {"isynkgr", "kg_only", "graph_only"}:
-        return base.replace(source, target)
-    if method == "rag":
-        return f"{base.replace(source, target)}_rag"
-    return f"{target}_guess_{sample['sample_id'].split('_')[-1]}"
-
-
-def score(pred: str, gt: str) -> dict[str, float]:
-    ok = float(pred == gt)
-    return {"accuracy": ok, "precision": ok, "recall": ok, "f1": ok, "property_accuracy": ok}
 
 
 def run_pair(
@@ -113,7 +66,7 @@ def run_pair(
                     candidate_target=pred,
                     evidence=json.dumps(ret, sort_keys=True),
                 )
-                llm = client.generate(prompt, context={"sample_id": row["sample_id"], "method": method})
+                llm = client.complete_json(prompt, schema_name="reasoning_check", seed=145162578)
                 token_counts.append(llm.get("eval_count", 0) + llm.get("prompt_eval_count", 0))
             gt = gt_rows[row["sample_id"]]["target_entity"]
             sc = score(pred, gt)
@@ -172,52 +125,10 @@ def _rss_mb() -> float:
         return 0.0
 
 
-def save_outputs(rows: list[dict[str, Any]], out_root: Path) -> Path:
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    out_dir = out_root / ts
-    plot_dir = out_dir / "plots"
-    plot_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "metrics.json").write_text(json.dumps(rows, indent=2))
-    with (out_dir / "metrics.csv").open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-    _plot(rows, plot_dir / "f1_by_method.png")
-    latest = out_root / "latest"
-    if latest.exists() or latest.is_symlink():
-        import shutil
-
-        if latest.is_symlink() or latest.is_file():
-            latest.unlink()
-        else:
-            shutil.rmtree(latest)
-    import shutil
-
-    shutil.copytree(out_dir, latest)
-    return out_dir
-
-
-def _plot(rows: list[dict[str, Any]], path: Path) -> None:
-    if plt is None:
-        return
-    methods = sorted(set(r["method"] for r in rows))
-    vals = [statistics.mean([r["f1"] for r in rows if r["method"] == m]) for m in methods]
-    plt.figure(figsize=(8, 4))
-    plt.bar(methods, vals)
-    plt.ylim(0, 1)
-    plt.title("Mean F1 by method")
-    plt.tight_layout()
-    plt.savefig(path)
-
-
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--model", default="qwen3:0.6b")
     p.add_argument("--max-samples", type=int, default=20)
-    p.add_argument("--no-graphrag", action="store_true")
-    p.add_argument("--no-cot", action="store_true")
-    p.add_argument("--no-community", action="store_true")
-    p.add_argument("--no-parallel-retrievers", action="store_true")
     p.add_argument("--config", type=Path, default=Path("benchmarks/configs/standards.json"))
     args = p.parse_args()
 
