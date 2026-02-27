@@ -60,6 +60,35 @@ def _deduplicate_and_sort_mappings(mappings: list[dict]) -> list[dict]:
     return [best_by_key[key] for key in sorted(best_by_key)]
 
 
+
+
+def _enforce_cardinality(sample_mappings: list[dict], contract: dict, item_violations: list[dict]) -> list[dict]:
+    expected_count = contract["expected_count"]
+    if contract["mode"] == "grouped_1":
+        return sample_mappings
+    if len(sample_mappings) <= expected_count:
+        return sample_mappings
+
+    def _rank(mapping: dict) -> tuple[float, int]:
+        confidence = float(mapping.get("confidence", 0.0))
+        no_match_penalty = 1 if mapping.get("mapping_type") == MappingType.NO_MATCH.value else 0
+        return (confidence, -no_match_penalty)
+
+    trimmed = sorted(sample_mappings, key=_rank, reverse=True)[:expected_count]
+    item_violations.append(
+        {
+            "type": "cardinality_trimmed",
+            "message": (
+                f"Trimmed mappings from {len(sample_mappings)} to {expected_count} "
+                f"for mode={contract['mode']}"
+            ),
+            "expected_count": expected_count,
+            "actual_count": len(sample_mappings),
+            "trimmed_count": len(trimmed),
+            "contract": contract,
+        }
+    )
+    return _deduplicate_and_sort_mappings(trimmed)
 def _extract_cardinality_contract(row: dict) -> dict:
     contract = row.get("cardinality_contract") or {}
     mode = str(contract.get("mode") or "one_to_one")
@@ -159,6 +188,8 @@ def main() -> None:
             )
 
         sample_mappings = _deduplicate_and_sort_mappings(sample_mappings)
+
+        sample_mappings = _enforce_cardinality(sample_mappings, contract, item_violations)
 
         expected_count = contract["expected_count"]
         if contract["mode"] != "grouped_1" and len(sample_mappings) != expected_count:
