@@ -8,6 +8,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib import request
 from urllib.parse import urlparse
 
@@ -85,6 +86,12 @@ def wait_for_ollama(base_url: str, timeout_s: int = 90) -> str:
                     if resp.status == 200:
                         print(f"Ollama ready at {endpoint}.", flush=True)
                         return endpoint
+            except HTTPError as exc:
+                # Some deployments lock down /api/tags but still serve /api/generate.
+                if exc.code in {401, 403, 405}:
+                    print(f"Ollama reachable at {endpoint} (status={exc.code}); proceeding.", flush=True)
+                    return endpoint
+                print(f"... still waiting ({endpoint}: HTTP {exc.code})", flush=True)
             except Exception as exc:  # noqa: BLE001
                 print(f"... still waiting ({endpoint}: {exc})", flush=True)
         time.sleep(3)

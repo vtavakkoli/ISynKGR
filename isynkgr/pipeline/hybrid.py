@@ -89,7 +89,15 @@ class HybridPipeline:
                 evidence=evidence,
             )
             raw = self.llm.complete_json(prompt, "MappingOutputContract", config.seed)
-            llm_raw_output.append({"method": mode, "source_protocol": source_standard, "target_protocol": target_standard, "raw": raw})
+            llm_raw_output.append(
+                {
+                    "method": mode,
+                    "source_protocol": source_standard,
+                    "target_protocol": target_standard,
+                    "prompt": prompt,
+                    "raw": raw,
+                }
+            )
             llm_error = raw.get("_llm_error")
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
             mappings.extend(llm_report.accepted)

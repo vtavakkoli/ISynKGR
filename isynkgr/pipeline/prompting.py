@@ -65,6 +65,9 @@ def build_mapping_prompt(
         f"3) source_path must start with '{source_protocol.lower()}://'.\n"
         f"4) target_path must start with '{target_protocol.lower()}://' or be empty string only when mapping_type == 'no_match'.\n"
         "5) confidence must be numeric between 0 and 1.\n"
+        "6) Preserve the source signal semantic token (e.g., speed/temp/pressure/current/voltage/flow) in target_path naming.\n"
+        "7) For AAS targets use canonical shape: aas://<asset>/submodel/default/element/<signal>/value.\n"
+        "8) Prefer one high-confidence mapping per source variable when possible.\n"
         "Input context:\n"
         f"{json.dumps(payload, ensure_ascii=False)}"
     )
