@@ -112,7 +112,7 @@ def main() -> None:
     source_protocol = os.getenv("SOURCE_PROTOCOL", "opcua")
     target_protocol = os.getenv("TARGET_PROTOCOL", "aas")
     max_samples = int(os.getenv("MAX_ITEMS", os.getenv("MAX_SAMPLES", "100")))
-    model_name = os.getenv("MODEL_NAME", "qwen3:0.6b")
+    model_name = os.getenv("MODEL_NAME", "qwen3.5:0.8b")
     seed = int(os.getenv("SEED", "42"))
     tier = os.getenv("TIER", "canonical")
     output_dir.mkdir(parents=True, exist_ok=True)
