@@ -97,12 +97,15 @@ services:
       dockerfile: docker/sut/rule_only/Dockerfile
     environment:
       PYTHONUNBUFFERED: "1"
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       MODEL_NAME: ${MODEL_NAME:-qwen3.5:0.8b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       [
         "bash",
         "-lc",
-        "set -o pipefail; pytest -s tests/test_llm_conversion_samples.py",
+        "set -o pipefail; python -u -m benchmark.simple_llm_test --model ${MODEL_NAME}",
       ]
     volumes:
       - ./:/app
