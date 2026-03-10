@@ -30,19 +30,40 @@ class OllamaClient:
         with self.io_log_path.open("a", encoding="utf-8") as fp:
             fp.write(json.dumps(record, ensure_ascii=False) + "\n")
 
+    @staticmethod
+    def _parse_model_json(response_text: str) -> dict:
+        text = (response_text or "").strip()
+        if not text:
+            raise ValueError("Ollama returned empty model response")
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start < 0 or end <= start:
+                raise ValueError(f"Model response is not JSON: {text[:200]}") from None
+            parsed = json.loads(text[start : end + 1])
+        if not isinstance(parsed, dict):
+            raise ValueError("Model response JSON must be an object")
+        return parsed
+
     def _call_generate(self, endpoint: str, prompt: str, seed: int) -> dict:
         body = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
             "format": "json",
+            "think": False,
             "options": {"seed": seed, "temperature": 0},
         }
         self._log_io("request", {"endpoint": endpoint, "request_body": body})
         req = urllib.request.Request(endpoint, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=60) as resp:
-            raw = json.loads(resp.read().decode())
-        parsed = json.loads(raw.get("response", "{}"))
+            raw_text = resp.read().decode(errors="replace").strip()
+        if not raw_text:
+            raise ValueError("Empty response body from Ollama")
+        raw = json.loads(raw_text)
+        parsed = self._parse_model_json(str(raw.get("response", "")))
         self._log_io("response", {"endpoint": endpoint, "response_body": raw, "parsed": parsed})
         return parsed
 
