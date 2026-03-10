@@ -72,7 +72,7 @@ class HybridPipeline:
         rejected: list[dict[str, Any]] = []
         llm_raw_output: list[dict[str, Any]] = []
 
-        if mode in {"hybrid", "rule_only"}:
+        if mode in {"hybrid", "rule_only", "graph_only"}:
             rule_mappings = self.rules.apply_rules(source_model, target_standard)
             rule_report = normalize_mapping_items([m.model_dump() for m in rule_mappings], source_standard, target_standard, method="rule")
             mappings.extend(rule_report.accepted)

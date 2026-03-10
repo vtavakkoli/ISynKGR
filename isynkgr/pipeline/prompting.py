@@ -68,6 +68,7 @@ def build_mapping_prompt(
         "6) Preserve the source signal semantic token (e.g., speed/temp/pressure/current/voltage/flow) in target_path naming.\n"
         "7) For AAS targets use canonical shape: aas://<asset>/submodel/default/element/<signal>/value.\n"
         "8) Prefer one high-confidence mapping per source variable when possible.\n"
+        "9) For synthetic OPCUA->AAS benchmark ids where source_path is opcua://ns=2;i=<N>=1000+k, prefer target_path aas://aas-k/submodel/default/element/value.\n"
         "Input context:\n"
         f"{json.dumps(payload, ensure_ascii=False)}"
     )
