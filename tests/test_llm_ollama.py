@@ -9,10 +9,12 @@ from isynkgr.utils.caching import JsonCache
 
 
 class _FakeResponse:
-    def __init__(self, payload: dict) -> None:
+    def __init__(self, payload: dict | str) -> None:
         self._payload = payload
 
     def read(self) -> bytes:
+        if isinstance(self._payload, str):
+            return self._payload.encode()
         return json.dumps(self._payload).encode()
 
     def __enter__(self):
@@ -69,3 +71,33 @@ def test_complete_json_does_not_cache_failed_calls(monkeypatch: pytest.MonkeyPat
     assert result.get("_llm_error", {}).get("type") == "llm_request_failed"
     assert cache.get(key) is None
     assert any(json.loads(line)["event"] == "error" for line in log_path.read_text().splitlines())
+
+
+def test_complete_json_extracts_json_from_wrapped_model_response(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    cache = JsonCache(root=str(tmp_path / "cache"))
+    monkeypatch.setenv("OLLAMA_IO_LOG", str(tmp_path / "ollama_io.jsonl"))
+    client = OllamaClient(model="demo", base_url="http://example", cache=cache)
+
+    def _fake_urlopen(req, timeout=0):  # noqa: ANN001
+        payload = {
+            "response": "<think>internal</think>\n{\"mappings\":[{\"source_path\":\"opcua://x\",\"target_path\":\"aas://y/submodel/default/element/v\",\"mapping_type\":\"equivalent\"}]}",
+        }
+        return _FakeResponse(payload)
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    result = client.complete_json("prompt", "MappingList", 42)
+    assert result["mappings"][0]["mapping_type"] == "equivalent"
+
+
+def test_complete_json_handles_empty_model_response(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    cache = JsonCache(root=str(tmp_path / "cache"))
+    monkeypatch.setenv("OLLAMA_IO_LOG", str(tmp_path / "ollama_io.jsonl"))
+    client = OllamaClient(model="demo", base_url="http://example", cache=cache)
+
+    def _fake_urlopen(req, timeout=0):  # noqa: ANN001
+        return _FakeResponse({"response": ""})
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+    result = client.complete_json("prompt", "MappingList", 42)
+    assert result.get("_llm_error", {}).get("type") == "llm_request_failed"

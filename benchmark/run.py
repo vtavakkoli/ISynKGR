@@ -161,7 +161,8 @@ def run_scenario(args: argparse.Namespace) -> int:
     (out_dir / "config_resolved.json").write_text(json.dumps(resolved_args, indent=2, sort_keys=True))
 
     if mode in {"isynkgr_hybrid", "llm_only", "rag_only"}:
-        ollama_host = wait_for_ollama(ollama_host)
+        timeout_s = int(os.getenv("OLLAMA_READY_TIMEOUT_S", "120"))
+        ollama_host = wait_for_ollama(ollama_host, timeout_s=timeout_s)
 
     env = os.environ.copy()
     env.update(
@@ -205,7 +206,7 @@ def main() -> int:
     parser.add_argument("--config", default="benchmark/config.json")
     parser.add_argument("--out", required=True)
     parser.add_argument("--ollama-host", default=os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434"))
-    parser.add_argument("--model-name", default=os.getenv("MODEL_NAME", "qwen3:0.6b"))
+    parser.add_argument("--model-name", default=os.getenv("MODEL_NAME", "qwen3.5:0.8b"))
     parser.add_argument("--seed", type=int, default=int(os.getenv("SEED", "42")))
     parser.add_argument("--max-items", type=int, default=int(os.getenv("MAX_ITEMS", "100")))
     parser.add_argument("--tier", default=os.getenv("TIER", "canonical"))

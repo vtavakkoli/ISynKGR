@@ -37,7 +37,7 @@ def build_mapping_prompt(
                 "source_path": f"{source_protocol.lower()}://...",
                 "target_path": f"{target_protocol.lower()}://... or '' when mapping_type=='no_match'",
                 "mapping_type": "equivalent|approximate|label_match|transform|no_match",
-                "transform": {"op": "identity|concat|cast|format|regex_extract", "args": {}} if "transform" else None,
+                "transform": {"op": "identity|concat|cast|format|regex_extract", "args": {}},
                 "confidence": 0.0,
                 "rationale": "string (8..1000 chars)",
                 "evidence": ["string"],
@@ -54,7 +54,9 @@ def build_mapping_prompt(
     }
     return (
         "You are an industrial protocol mapping assistant.\n"
-        "Return JSON only and no markdown, comments, or prose.\n"
+        "Return JSON only and no markdown, comments, XML tags, or prose.\n"
+        "Do not output hidden reasoning or thinking. Put only concise rationale/evidence text in final JSON.\n"
+        "Return exactly one top-level JSON object and nothing else.\n"
         "The response MUST match this contract exactly:\n"
         f"{json.dumps(contract, ensure_ascii=False)}\n"
         "Rules:\n"
