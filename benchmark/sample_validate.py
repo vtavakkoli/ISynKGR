@@ -61,7 +61,7 @@ def _run_scenario_samples(scenario: str, out_dir: Path) -> int:
         "--max-items",
         "5",
         "--model-name",
-        "qwen3:0.6b",
+        "qwen3.5:0.8b",
         "--tier",
         "canonical",
     ]

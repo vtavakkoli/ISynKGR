@@ -127,7 +127,7 @@ def _rss_mb() -> float:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="qwen3:0.6b")
+    p.add_argument("--model", default="qwen3.5:0.8b")
     p.add_argument("--max-samples", type=int, default=20)
     p.add_argument("--config", type=Path, default=Path("benchmarks/configs/standards.json"))
     args = p.parse_args()
