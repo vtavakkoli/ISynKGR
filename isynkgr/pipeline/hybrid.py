@@ -21,7 +21,7 @@ Mode = Literal["hybrid", "llm_only", "rag_only", "rule_only", "graph_only"]
 
 
 class TranslatorConfig:
-    def __init__(self, model_name: str = "qwen3:0.6b", seed: int = 42, max_repair_iterations: int = 2, enable_vector_retrieval: bool = False) -> None:
+    def __init__(self, model_name: str = "qwen3.5:0.8b", seed: int = 42, max_repair_iterations: int = 2, enable_vector_retrieval: bool = False) -> None:
         self.model_name = model_name
         self.seed = seed
         self.max_repair_iterations = max_repair_iterations
@@ -89,7 +89,15 @@ class HybridPipeline:
                 evidence=evidence,
             )
             raw = self.llm.complete_json(prompt, "MappingOutputContract", config.seed)
-            llm_raw_output.append({"method": mode, "source_protocol": source_standard, "target_protocol": target_standard, "raw": raw})
+            llm_raw_output.append(
+                {
+                    "method": mode,
+                    "source_protocol": source_standard,
+                    "target_protocol": target_standard,
+                    "prompt": prompt,
+                    "raw": raw,
+                }
+            )
             llm_error = raw.get("_llm_error")
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
             mappings.extend(llm_report.accepted)
