@@ -161,7 +161,8 @@ def run_scenario(args: argparse.Namespace) -> int:
     (out_dir / "config_resolved.json").write_text(json.dumps(resolved_args, indent=2, sort_keys=True))
 
     if mode in {"isynkgr_hybrid", "llm_only", "rag_only"}:
-        ollama_host = wait_for_ollama(ollama_host)
+        timeout_s = int(os.getenv("OLLAMA_READY_TIMEOUT_S", "120"))
+        ollama_host = wait_for_ollama(ollama_host, timeout_s=timeout_s)
 
     env = os.environ.copy()
     env.update(
