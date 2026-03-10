@@ -105,7 +105,7 @@ services:
       [
         "bash",
         "-lc",
-        "set -o pipefail; python -u -m benchmark.simple_llm_test --model ${MODEL_NAME}",
+        "set -o pipefail; python -u -m benchmark.simple_llm_test --model $${MODEL_NAME}",
       ]
     volumes:
       - ./:/app
