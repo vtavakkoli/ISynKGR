@@ -104,3 +104,30 @@ def test_hybrid_modes_emit_schema_valid_mappings(monkeypatch):
             ok, err = validate_mapping_item(mapping.model_dump(), pair[0], pair[1])
             assert ok, f"{mode}: {err}"
         assert isinstance(result.provenance.metadata.get("rejected_mappings", []), list)
+
+
+def test_llm_only_repairs_synthetic_aas_k_placeholder(monkeypatch):
+    from isynkgr.pipeline import hybrid as hybrid_mod
+    from isynkgr.rules.engine import RuleEngine
+
+    class _PlaceholderLLM:
+        def complete_json(self, *_args, **_kwargs):
+            return {
+                "mappings": [
+                    {
+                        "source_path": "opcua://ns=2;i=1004",
+                        "target_path": "aas://aas-k/submodel/default/element/value",
+                        "mapping_type": "transform",
+                        "transform": {"op": "identity", "args": {}},
+                        "confidence": 0.9,
+                        "rationale": "placeholder output",
+                        "evidence": [],
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(hybrid_mod, "ADAPTERS", {"opcua": _FakeAdapter("opcua"), "aas": _FakeAdapter("aas"), "iec61499": _FakeAdapter("iec61499")})
+    pipeline = HybridPipeline(llm=_PlaceholderLLM(), retriever=_FakeRetriever(), rules=RuleEngine())
+    result = pipeline.run("opcua", "aas", source_raw="x", mode="llm_only", config=TranslatorConfig(seed=7))
+    assert result.mappings[0].target_path == "aas://aas-4/submodel/default/element/value"
+    assert result.mappings[0].mapping_type.value == "equivalent"
