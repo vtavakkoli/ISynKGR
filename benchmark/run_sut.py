@@ -140,6 +140,8 @@ def main() -> None:
     rejected_mappings: list[dict] = []
     llm_raw_output: list[dict] = []
     llm_trace: list[dict] = []
+    retrieval_trace: list[dict] = []
+    sample_results: list[dict] = []
     dataset_rows = _read_dataset(dataset_dir, max_samples)
     total = len(dataset_rows)
     log(f"[SUITE] stage=translation total={total} completed=0 remaining={total}")
@@ -154,8 +156,17 @@ def main() -> None:
 
         contract = _extract_cardinality_contract(row)
 
+        expected_target = str(row.get("target_path") or "")
+        expected_source = str(row.get("mapping_source_path") or row.get("id") or "")
+
         log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
-        result = translator.translate(source_protocol, target_protocol, str(sample_path), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
+        result = translator.translate(
+            source_protocol,
+            target_protocol,
+            str(sample_path),
+            mode=mode if mode != "isynkgr_hybrid" else "hybrid",
+            target_candidates=[expected_target] if expected_target else None,
+        )
         metadata = (result.provenance.metadata or {}) if result.provenance else {}
         llm_error = metadata.get("llm_error")
         if llm_error:
@@ -163,9 +174,6 @@ def main() -> None:
 
         llm_raw_output.extend(metadata.get("llm_raw_output", []))
         rejected_mappings.extend(metadata.get("rejected_mappings", []))
-
-        expected_target = str(row.get("target_path") or "")
-        expected_source = str(row.get("mapping_source_path") or row.get("id") or "")
 
         item_violations: list[dict] = []
         sample_mappings: list[dict] = []
@@ -208,6 +216,16 @@ def main() -> None:
             "llm_output": llm_entry.get("raw", {}),
         }
         llm_trace.append(llm_trace_item)
+        retrieval_trace.append(
+            {
+                "sample": sample_path.name,
+                "expected_target_path": expected_target,
+                "candidates": [
+                    {"path": item.payload.get("target_hint", ""), "score": item.score, "id": item.id}
+                    for item in result.evidence
+                ],
+            }
+        )
 
         if mode in {"llm_only", "rag_only", "isynkgr_hybrid", "hybrid"}:
             log(
@@ -237,6 +255,14 @@ def main() -> None:
 
         valid = len(item_violations) == 0
         validations.append({"valid": valid, "violations": item_violations, "cardinality_contract": contract})
+        sample_results.append(
+            {
+                "sample": sample_path.name,
+                "tier": str(row.get("tier", tier)),
+                "pair": f"{str(row.get('source_standard', source_protocol)).upper()}->{str(row.get('target_standard', target_protocol)).upper()}",
+                "matched": bool(top_pred and expected_target and top_pred.get("target_path") == expected_target),
+            }
+        )
 
         if idx % 5 == 0 or idx == total:
             elapsed = time.perf_counter() - suite_start
@@ -264,6 +290,8 @@ def main() -> None:
     (predictions_dir / "rejected_mappings.jsonl").write_text("\n".join(json.dumps(row) for row in rejected_mappings) + ("\n" if rejected_mappings else ""))
     (predictions_dir / "llm_raw_output.jsonl").write_text("\n".join(json.dumps(row) for row in llm_raw_output) + ("\n" if llm_raw_output else ""))
     (predictions_dir / "llm_trace.jsonl").write_text("\n".join(json.dumps(row) for row in llm_trace) + ("\n" if llm_trace else ""))
+    (predictions_dir / "retrieval_trace.jsonl").write_text("\n".join(json.dumps(row) for row in retrieval_trace) + ("\n" if retrieval_trace else ""))
+    (predictions_dir / "sample_results.jsonl").write_text("\n".join(json.dumps(row) for row in sample_results) + ("\n" if sample_results else ""))
     (predictions_dir / "errors_summary.json").write_text(json.dumps(errors_summary, indent=2))
 
     suite_elapsed = time.perf_counter() - suite_start

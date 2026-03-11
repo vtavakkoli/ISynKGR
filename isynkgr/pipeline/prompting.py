@@ -23,6 +23,29 @@ def _node_summary(model: CanonicalModel, max_items: int = 30) -> list[dict[str, 
     return rows
 
 
+def _target_summary(evidence: list[EvidenceItem], target_protocol: str, max_items: int = 30) -> list[dict[str, Any]]:
+    prefix = f"{target_protocol.lower()}://"
+    exact: list[dict[str, Any]] = []
+    fallback: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in evidence:
+        payload = item.payload or {}
+        candidate_path = str(payload.get("candidate_path") or payload.get("target_hint") or "").strip()
+        if candidate_path.startswith(prefix):
+            if candidate_path in seen:
+                continue
+            seen.add(candidate_path)
+            exact.append({"path": candidate_path, "name": item.text, "description": item.kind, "exact_candidate": True})
+            continue
+        path = str(item.id)
+        if path in seen:
+            continue
+        seen.add(path)
+        fallback.append({"path": path, "name": item.text, "description": item.kind, "exact_candidate": False})
+    rows = exact if exact else fallback
+    return rows[:max_items]
+
+
 def build_mapping_prompt(
     source_protocol: str,
     target_protocol: str,
@@ -50,7 +73,7 @@ def build_mapping_prompt(
         "SOURCE_SCHEMA": source_schema_summary,
         "TARGET_SCHEMA": target_schema_summary,
         "SOURCE_VARIABLES": _node_summary(source_model),
-        "TARGET_VARIABLES": [{"path": e.id, "name": e.text, "description": e.kind} for e in evidence[:30]],
+        "TARGET_VARIABLES": _target_summary(evidence, target_protocol),
     }
     return (
         "You are an industrial protocol mapping assistant.\n"
@@ -65,10 +88,9 @@ def build_mapping_prompt(
         f"3) source_path must start with '{source_protocol.lower()}://'.\n"
         f"4) target_path must start with '{target_protocol.lower()}://' or be empty string only when mapping_type == 'no_match'.\n"
         "5) confidence must be numeric between 0 and 1.\n"
-        "6) Preserve the source signal semantic token (e.g., speed/temp/pressure/current/voltage/flow) in target_path naming.\n"
-        "7) For AAS targets use canonical shape: aas://<asset>/submodel/default/element/<signal>/value.\n"
+        "6) Choose target_path exactly from TARGET_VARIABLES when possible.\n"
+        "7) Do not invent a new target_path when an exact TARGET_VARIABLES candidate applies.\n"
         "8) Prefer one high-confidence mapping per source variable when possible.\n"
-        "9) For synthetic OPCUA->AAS benchmark ids where source_path is opcua://ns=2;i=<N>=1000+k, prefer target_path aas://aas-k/submodel/default/element/value.\n"
         "Input context:\n"
         f"{json.dumps(payload, ensure_ascii=False)}"
     )

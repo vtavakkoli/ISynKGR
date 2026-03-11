@@ -21,7 +21,7 @@ def test_full_workflow_fast_mode_generates_artifacts(monkeypatch):
         assert (root / "metrics" / "advanced_analysis.json").read_text().strip()
         assert (root / "report.md").read_text().strip()
         assert (root / "report.html").read_text().strip()
-        assert (root / "predictions" / "full_framework" / "mappings.jsonl").read_text().strip()
+        assert (root / "predictions" / "full_framework_seed11" / "mappings.jsonl").read_text().strip()
     finally:
         for p in [Path("artifacts") / run_id, Path("results") / run_id]:
             if p.is_symlink() or p.is_file():

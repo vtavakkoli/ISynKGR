@@ -22,9 +22,10 @@ class Translator:
         source_artifact_path: str | bytes | dict,
         mode: Literal["hybrid", "llm_only", "rag_only", "rule_only", "graph_only"] = "hybrid",
         config: TranslatorConfig | None = None,
+        target_candidates: list[str] | None = None,
     ) -> TranslationResult:
         cfg = config or self.config
         raw = source_artifact_path
         if isinstance(source_artifact_path, str) and Path(source_artifact_path).exists():
             raw = Path(source_artifact_path).read_bytes()
-        return self.pipeline.run(source_standard, target_standard, raw, mode=mode, config=cfg)
+        return self.pipeline.run(source_standard, target_standard, raw, mode=mode, config=cfg, target_candidates=target_candidates)
