@@ -50,8 +50,10 @@ def _resolve_gt_path(out_dir: Path) -> Path:
 
 
 def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
-    pred_rows_raw = _load_jsonl_rows(out_dir / "mappings.jsonl")
-    gt_rows_raw = _load_jsonl_rows(_resolve_gt_path(out_dir))
+    pred_path = out_dir / "mappings.jsonl"
+    gt_path = _resolve_gt_path(out_dir)
+    pred_rows_raw = _load_jsonl_rows(pred_path)
+    gt_rows_raw = _load_jsonl_rows(gt_path)
     pred_rows = _deduplicate_rows(pred_rows_raw)
     gt_rows = _deduplicate_rows(gt_rows_raw)
 
@@ -104,6 +106,9 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
         "gt_count": len(gt_keys),
         "matched_count": len(pred_keys & gt_keys),
         "evaluation_mode": evaluation_mode,
+        "dataset_count": len(gt_rows_raw),
+        "gt_path_used": str(gt_path),
+        "pred_path_used": str(pred_path),
     }
 
     if sample_rows:
