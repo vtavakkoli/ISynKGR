@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -30,7 +29,6 @@ class TranslatorConfig:
 
 
 ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter(), "iec61499": IEC61499Adapter(), "ieee1451": IEEE1451Adapter()}
-_OPCUA_SYNTHETIC_ID = re.compile(r"^opcua://ns=2;i=(?P<id>\d+)$")
 
 
 def _mapping_key(mapping: Mapping) -> tuple[str, str, str]:
@@ -56,37 +54,6 @@ def _schema_summary(model: CanonicalModel) -> dict[str, Any]:
         "edge_count": len(model.edges),
         "namespaces": list(model.namespaces.keys())[:10],
     }
-
-
-def _repair_synthetic_aas_target(mapping: Mapping, source_standard: str, target_standard: str) -> Mapping:
-    if source_standard != "opcua" or target_standard != "aas":
-        return mapping
-    match = _OPCUA_SYNTHETIC_ID.fullmatch(mapping.source_path.strip())
-    if not match:
-        return mapping
-    numeric_id = int(match.group("id"))
-    if numeric_id < 1000:
-        return mapping
-
-    expected_target = f"aas://aas-{numeric_id - 1000}/submodel/default/element/value"
-    if mapping.target_path == expected_target:
-        return mapping
-    if "aas-k/submodel/default/element/value" not in mapping.target_path and mapping.mapping_type.value == "no_match":
-        return mapping
-
-    return normalize_mapping_item(
-        {
-            "source_path": mapping.source_path,
-            "target_path": expected_target,
-            "mapping_type": "equivalent",
-            "transform": None,
-            "confidence": max(0.0, min(1.0, float(mapping.confidence))),
-            "rationale": (mapping.rationale + " Synthetic benchmark id repair applied.").strip(),
-            "evidence": [*mapping.evidence, "repair:synthetic_opcua_aas"],
-        },
-        source_standard,
-        target_standard,
-    )
 
 
 @dataclass
@@ -133,8 +100,7 @@ class HybridPipeline:
             )
             llm_error = raw.get("_llm_error")
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
-            repaired = [_repair_synthetic_aas_target(m, source_standard, target_standard) for m in llm_report.accepted]
-            mappings.extend(repaired)
+            mappings.extend(llm_report.accepted)
             rejected.extend([item.model_dump() for item in llm_report.rejected])
 
 
