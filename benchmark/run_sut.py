@@ -112,7 +112,7 @@ def main() -> None:
     source_protocol = os.getenv("SOURCE_PROTOCOL", "opcua")
     target_protocol = os.getenv("TARGET_PROTOCOL", "aas")
     max_samples = int(os.getenv("MAX_ITEMS", os.getenv("MAX_SAMPLES", "100")))
-    model_name = os.getenv("MODEL_NAME", "qwen3:0.6b")
+    model_name = os.getenv("MODEL_NAME", "qwen3.5:0.8b")
     seed = int(os.getenv("SEED", "42"))
     tier = os.getenv("TIER", "canonical")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -139,6 +139,7 @@ def main() -> None:
     llm_bugs: list[dict] = []
     rejected_mappings: list[dict] = []
     llm_raw_output: list[dict] = []
+    llm_trace: list[dict] = []
     dataset_rows = _read_dataset(dataset_dir, max_samples)
     total = len(dataset_rows)
     log(f"[SUITE] stage=translation total={total} completed=0 remaining={total}")
@@ -162,6 +163,9 @@ def main() -> None:
 
         llm_raw_output.extend(metadata.get("llm_raw_output", []))
         rejected_mappings.extend(metadata.get("rejected_mappings", []))
+
+        expected_target = str(row.get("target_path") or "")
+        expected_source = str(row.get("mapping_source_path") or row.get("id") or "")
 
         item_violations: list[dict] = []
         sample_mappings: list[dict] = []
@@ -190,6 +194,32 @@ def main() -> None:
         sample_mappings = _deduplicate_and_sort_mappings(sample_mappings)
 
         sample_mappings = _enforce_cardinality(sample_mappings, contract, item_violations)
+
+        top_pred = sample_mappings[0] if sample_mappings else None
+        llm_entry = (metadata.get("llm_raw_output") or [{}])[0]
+        llm_trace_item = {
+            "sample": sample_path.name,
+            "mode": mode,
+            "expected_source_path": expected_source,
+            "expected_target_path": expected_target,
+            "predicted_top": top_pred,
+            "matched_expected_target": bool(top_pred and expected_target and top_pred.get("target_path") == expected_target),
+            "llm_prompt": llm_entry.get("prompt", ""),
+            "llm_output": llm_entry.get("raw", {}),
+        }
+        llm_trace.append(llm_trace_item)
+
+        if mode in {"llm_only", "rag_only", "isynkgr_hybrid", "hybrid"}:
+            log(
+                "[LLM-TRACE] "
+                f"sample={sample_path.name} expected_target={expected_target or '<none>'} "
+                f"predicted_target={(top_pred or {}).get('target_path', '<none>')} "
+                f"match={(llm_trace_item['matched_expected_target'])}"
+            )
+            if llm_trace_item["llm_prompt"]:
+                log(f"[LLM-PROMPT] sample={sample_path.name} prompt={llm_trace_item['llm_prompt']}")
+            if llm_trace_item["llm_output"]:
+                log(f"[LLM-RAW] sample={sample_path.name} raw={json.dumps(llm_trace_item['llm_output'], ensure_ascii=False)}")
 
         expected_count = contract["expected_count"]
         if contract["mode"] != "grouped_1" and len(sample_mappings) != expected_count:
@@ -233,6 +263,7 @@ def main() -> None:
     (output_dir / "bugs.json").write_text(json.dumps(llm_bugs, indent=2))
     (predictions_dir / "rejected_mappings.jsonl").write_text("\n".join(json.dumps(row) for row in rejected_mappings) + ("\n" if rejected_mappings else ""))
     (predictions_dir / "llm_raw_output.jsonl").write_text("\n".join(json.dumps(row) for row in llm_raw_output) + ("\n" if llm_raw_output else ""))
+    (predictions_dir / "llm_trace.jsonl").write_text("\n".join(json.dumps(row) for row in llm_trace) + ("\n" if llm_trace else ""))
     (predictions_dir / "errors_summary.json").write_text(json.dumps(errors_summary, indent=2))
 
     suite_elapsed = time.perf_counter() - suite_start
