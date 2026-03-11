@@ -12,6 +12,11 @@ from isynkgr.translator import Translator
 BASELINES = ["rule_only", "graph_only", "isynkgr_hybrid", "rag_only", "llm_only"]
 
 
+def _load_gt_subset(limit: int) -> list[dict]:
+    gt = Path("datasets/v1/crosswalk/gt_mappings.jsonl")
+    return [json.loads(line) for line in gt.read_text().splitlines() if line.strip()][:limit]
+
+
 def _run_local_baseline(mode: str, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     translator = Translator(TranslatorConfig(seed=42))
@@ -47,8 +52,10 @@ def generate_final_report() -> Path:
     final_dir = Path("results/final")
     final_dir.mkdir(parents=True, exist_ok=True)
 
-    gt = Path("datasets/v1/crosswalk/gt_mappings.jsonl")
-    (final_dir / "gt_mappings.jsonl").write_text(gt.read_text())
+    gt_subset = _load_gt_subset(limit=10)
+    gt_subset_text = "\n".join(json.dumps(row) for row in gt_subset) + "\n"
+    (final_dir / "gt_mappings.jsonl").write_text(gt_subset_text)
+    (final_dir / "ground_truth.jsonl").write_text(gt_subset_text)
 
     rows = []
     for mode in BASELINES:

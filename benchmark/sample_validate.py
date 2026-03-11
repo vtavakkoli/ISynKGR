@@ -87,12 +87,17 @@ def main() -> int:
             continue
 
         metrics = json.loads((out_dir / "metrics.json").read_text())
+        f1 = float(metrics.get("f1", 0.0))
+        matched_count = int(metrics.get("matched_count", 0))
         checks = {
             "gt_count == 5": metrics.get("gt_count") == 5,
             "pred_count == 5": metrics.get("pred_count") == 5,
             "dataset_count == 5": metrics.get("dataset_count") == 5,
-            "f1 present": isinstance(metrics.get("f1"), (int, float)),
+            "f1 >= 0.20": f1 >= 0.20,
         }
+        if scenario in {"full_framework", "ablation_no_graphrag", "ablation_no_parallel"}:
+            checks["matched_count > 0"] = matched_count > 0
+            checks["target paths benchmark-shaped"] = float(metrics.get("benchmark_target_shape_rate", 0.0)) >= 0.80
         failed = [name for name, ok in checks.items() if not ok]
         print(
             f"[SAMPLE] scenario={scenario} gt_path={metrics.get('gt_path_used')} "

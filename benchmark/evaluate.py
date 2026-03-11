@@ -85,6 +85,12 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
 
     per_type = group_prf1(typed_rows, "mapping_type")
 
+    benchmark_prefix = "aas://"
+    benchmark_shape_hits = sum(
+        1 for row in pred_rows if str(row.get("target_path", "")).startswith(benchmark_prefix) and "/submodel/default/element/value" in str(row.get("target_path", ""))
+    )
+    benchmark_target_shape_rate = benchmark_shape_hits / len(pred_rows) if pred_rows else 0.0
+
     score = {
         "precision": exact["exact_mapping_precision"],
         "recall": exact["exact_mapping_recall"],
@@ -109,6 +115,7 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
         "dataset_count": len(gt_rows_raw),
         "gt_path_used": str(gt_path),
         "pred_path_used": str(pred_path),
+        "benchmark_target_shape_rate": benchmark_target_shape_rate,
     }
 
     if sample_rows:

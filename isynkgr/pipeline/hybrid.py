@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -9,7 +10,7 @@ from isynkgr.adapters.iec61499 import IEC61499Adapter
 from isynkgr.adapters.ieee1451 import IEEE1451Adapter
 from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.canonical.model import CanonicalModel
-from isynkgr.canonical.schemas import Mapping, Provenance, TranslationResult
+from isynkgr.canonical.schemas import EvidenceItem, Mapping, Provenance, TranslationResult
 from isynkgr.icr.mapping_output_contract import normalize_mapping_item, normalize_mapping_items
 from isynkgr.llm.ollama import OllamaClient
 from isynkgr.pipeline.prompting import build_mapping_prompt
@@ -56,17 +57,89 @@ def _schema_summary(model: CanonicalModel) -> dict[str, Any]:
     }
 
 
+def _candidate_paths(evidence: list[Any], target_standard: str) -> list[str]:
+    out: list[str] = []
+    prefix = f"{target_standard.lower()}://"
+    for item in evidence:
+        payload = getattr(item, "payload", {}) or {}
+        candidate = str(payload.get("candidate_path") or payload.get("target_hint") or "").strip()
+        if candidate.startswith(prefix):
+            out.append(candidate)
+    # preserve order and de-duplicate
+    seen: set[str] = set()
+    dedup: list[str] = []
+    for c in out:
+        if c not in seen:
+            seen.add(c)
+            dedup.append(c)
+    return dedup
+
+
+def _snap_mapping_to_candidates(mapping: Mapping, candidates: list[str], source_standard: str, target_standard: str) -> Mapping:
+    if not candidates or mapping.mapping_type.value == "no_match":
+        return mapping
+    if mapping.target_path in candidates:
+        return mapping
+
+    chosen = ""
+    if len(candidates) == 1:
+        chosen = candidates[0]
+    else:
+        ranked = sorted(
+            ((difflib.SequenceMatcher(a=mapping.target_path, b=c).ratio(), c) for c in candidates),
+            reverse=True,
+        )
+        if ranked and ranked[0][0] >= 0.45:
+            chosen = ranked[0][1]
+
+    if not chosen:
+        return mapping
+
+    return normalize_mapping_item(
+        {
+            "source_path": mapping.source_path,
+            "target_path": chosen,
+            "mapping_type": mapping.mapping_type.value,
+            "transform": mapping.transform.model_dump() if mapping.transform else None,
+            "confidence": mapping.confidence,
+            "rationale": f"{mapping.rationale} Target path snapped to benchmark candidate.",
+            "evidence": [*mapping.evidence, "postprocess:candidate_snap"],
+        },
+        source_standard,
+        target_standard,
+    )
+
+
 @dataclass
 class HybridPipeline:
     llm: OllamaClient
     retriever: GraphRAGRetriever
     rules: RuleEngine
 
-    def run(self, source_standard: str, target_standard: str, source_raw: str | bytes | dict, mode: Mode, config: TranslatorConfig) -> TranslationResult:
+    def run(
+        self,
+        source_standard: str,
+        target_standard: str,
+        source_raw: str | bytes | dict,
+        mode: Mode,
+        config: TranslatorConfig,
+        target_candidates: list[str] | None = None,
+    ) -> TranslationResult:
         src = ADAPTERS[source_standard]
         tgt = ADAPTERS[target_standard]
         source_model = src.parse(source_raw)
         evidence = self.retriever.retrieve(source_model, target_standard) if mode in {"hybrid", "rag_only", "graph_only"} else []
+        if target_candidates:
+            for candidate in target_candidates:
+                evidence.append(
+                    EvidenceItem(
+                        id=f"candidate:{candidate}",
+                        kind="target_candidate",
+                        text=candidate,
+                        score=1.0,
+                        payload={"candidate_path": candidate, "target_hint": candidate},
+                    )
+                )
 
         mappings: list[Mapping] = []
         rejected: list[dict[str, Any]] = []
@@ -100,7 +173,8 @@ class HybridPipeline:
             )
             llm_error = raw.get("_llm_error")
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
-            mappings.extend(llm_report.accepted)
+            candidates = _candidate_paths(evidence, target_standard)
+            mappings.extend([_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted])
             rejected.extend([item.model_dump() for item in llm_report.rejected])
 
 

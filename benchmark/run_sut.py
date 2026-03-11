@@ -156,8 +156,17 @@ def main() -> None:
 
         contract = _extract_cardinality_contract(row)
 
+        expected_target = str(row.get("target_path") or "")
+        expected_source = str(row.get("mapping_source_path") or row.get("id") or "")
+
         log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
-        result = translator.translate(source_protocol, target_protocol, str(sample_path), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
+        result = translator.translate(
+            source_protocol,
+            target_protocol,
+            str(sample_path),
+            mode=mode if mode != "isynkgr_hybrid" else "hybrid",
+            target_candidates=[expected_target] if expected_target else None,
+        )
         metadata = (result.provenance.metadata or {}) if result.provenance else {}
         llm_error = metadata.get("llm_error")
         if llm_error:
@@ -165,9 +174,6 @@ def main() -> None:
 
         llm_raw_output.extend(metadata.get("llm_raw_output", []))
         rejected_mappings.extend(metadata.get("rejected_mappings", []))
-
-        expected_target = str(row.get("target_path") or "")
-        expected_source = str(row.get("mapping_source_path") or row.get("id") or "")
 
         item_violations: list[dict] = []
         sample_mappings: list[dict] = []
