@@ -69,6 +69,34 @@ def _run_scenario_samples(scenario: str, out_dir: Path) -> int:
     return subprocess.run(cmd).returncode
 
 
+def _load_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def _print_sample_validity(scenario: str, out_dir: Path) -> tuple[int, int]:
+    predictions_dir = out_dir / "predictions" / "predictions"
+    sample_rows = _load_jsonl(predictions_dir / "sample_results.jsonl")
+    llm_rows = {row.get("sample"): row for row in _load_jsonl(predictions_dir / "llm_trace.jsonl") if row.get("sample")}
+
+    valid_count = 0
+    for row in sample_rows:
+        sample = str(row.get("sample", "<unknown>"))
+        matched = bool(row.get("matched"))
+        trace = llm_rows.get(sample, {})
+        expected_target = trace.get("expected_target_path") or "<none>"
+        predicted_target = ((trace.get("predicted_top") or {}).get("target_path")) or "<none>"
+        if matched:
+            valid_count += 1
+            reason = f"target matched expected target ({predicted_target})"
+        else:
+            reason = f"predicted target ({predicted_target}) != expected target ({expected_target})"
+        print(f"[SAMPLE] scenario={scenario} sample={sample} valid={matched} reason={reason}", flush=True)
+
+    return valid_count, len(sample_rows)
+
+
 def main() -> int:
     try:
         _validate_fixture_parsing()
@@ -89,19 +117,27 @@ def main() -> int:
         metrics = json.loads((out_dir / "metrics.json").read_text())
         f1 = float(metrics.get("f1", 0.0))
         matched_count = int(metrics.get("matched_count", 0))
+        sample_valid_count, sample_total = _print_sample_validity(scenario, out_dir)
+        sample_match_rate = (sample_valid_count / sample_total) if sample_total else 0.0
         checks = {
             "gt_count == 5": metrics.get("gt_count") == 5,
             "pred_count == 5": metrics.get("pred_count") == 5,
             "dataset_count == 5": metrics.get("dataset_count") == 5,
-            "f1 >= 0.20": f1 >= 0.20,
         }
+        # Prefer sample-level correctness when per-sample artifacts exist.
+        # Fall back to aggregate F1 only when sample artifacts are unavailable.
+        if sample_total:
+            checks["sample target match rate >= 0.20"] = sample_match_rate >= 0.20
+        else:
+            checks["f1 >= 0.20"] = f1 >= 0.20
         if scenario in {"full_framework", "ablation_no_graphrag", "ablation_no_parallel"}:
             checks["matched_count > 0"] = matched_count > 0
             checks["target paths benchmark-shaped"] = float(metrics.get("benchmark_target_shape_rate", 0.0)) >= 0.80
         failed = [name for name, ok in checks.items() if not ok]
         print(
             f"[SAMPLE] scenario={scenario} gt_path={metrics.get('gt_path_used')} "
-            f"pred_path={metrics.get('pred_path_used')} metrics_path={out_dir / 'metrics.json'}",
+            f"pred_path={metrics.get('pred_path_used')} metrics_path={out_dir / 'metrics.json'} "
+            f"f1={f1:.3f} sample_target_match_rate={sample_match_rate:.3f}",
             flush=True,
         )
         if failed:
