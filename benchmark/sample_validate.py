@@ -123,8 +123,10 @@ def main() -> int:
             "gt_count == 5": metrics.get("gt_count") == 5,
             "pred_count == 5": metrics.get("pred_count") == 5,
             "dataset_count == 5": metrics.get("dataset_count") == 5,
-            "sample target match rate >= 0.20": sample_match_rate >= 0.20,
+            "f1 >= 0.20": f1 >= 0.20,
         }
+        if sample_total:
+            checks["sample target match rate >= 0.20"] = sample_match_rate >= 0.20
         if scenario in {"full_framework", "ablation_no_graphrag", "ablation_no_parallel"}:
             checks["matched_count > 0"] = matched_count > 0
             checks["target paths benchmark-shaped"] = float(metrics.get("benchmark_target_shape_rate", 0.0)) >= 0.80
