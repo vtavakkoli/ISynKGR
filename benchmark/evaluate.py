@@ -63,8 +63,6 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
     retrieval_rows = _load_optional_jsonl(out_dir / "predictions" / "retrieval_trace.jsonl")
     sample_rows = _load_optional_jsonl(out_dir / "predictions" / "sample_results.jsonl")
 
-    pred_by_source = {k[0]: k for k in pred_keys}
-    gt_by_source = {k[0]: k for k in gt_keys}
     transform_total = sum(1 for row in gt_rows if row.get("mapping_type") == "transform")
     transform_correct = sum(1 for row in gt_rows if row.get("mapping_type") == "transform" and _mapping_key(row) in pred_keys)
     path_validity = 1.0 - (sum((violation_counts(reports) or {}).values()) / max(len(reports), 1))
