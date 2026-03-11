@@ -80,13 +80,13 @@ def test_rule_engine_outputs_schema_valid_no_match_for_unresolved(monkeypatch):
     assert ok, err
 
 
-def test_rule_engine_maps_synthetic_opcua_ids_to_aas_benchmark_targets() -> None:
+def test_rule_engine_does_not_use_synthetic_opcua_id_shortcuts() -> None:
     from isynkgr.rules.engine import RuleEngine
 
     source = CanonicalModel(standard="opcua", nodes=[CanonicalNode(id="opcua://ns=2;i=1003", type="signal", label="Pump3")], edges=[])
     mappings = RuleEngine().apply_rules(source, target_protocol="aas", target=None)
-    assert mappings[0].mapping_type.value == "equivalent"
-    assert mappings[0].target_path == "aas://aas-3/submodel/default/element/value"
+    assert mappings[0].mapping_type.value == "no_match"
+    assert mappings[0].target_path == ""
 
 
 def test_hybrid_modes_emit_schema_valid_mappings(monkeypatch):
@@ -106,7 +106,7 @@ def test_hybrid_modes_emit_schema_valid_mappings(monkeypatch):
         assert isinstance(result.provenance.metadata.get("rejected_mappings", []), list)
 
 
-def test_llm_only_repairs_synthetic_aas_k_placeholder(monkeypatch):
+def test_llm_only_does_not_repair_synthetic_aas_k_placeholder(monkeypatch):
     from isynkgr.pipeline import hybrid as hybrid_mod
     from isynkgr.rules.engine import RuleEngine
 
@@ -129,5 +129,5 @@ def test_llm_only_repairs_synthetic_aas_k_placeholder(monkeypatch):
     monkeypatch.setattr(hybrid_mod, "ADAPTERS", {"opcua": _FakeAdapter("opcua"), "aas": _FakeAdapter("aas"), "iec61499": _FakeAdapter("iec61499")})
     pipeline = HybridPipeline(llm=_PlaceholderLLM(), retriever=_FakeRetriever(), rules=RuleEngine())
     result = pipeline.run("opcua", "aas", source_raw="x", mode="llm_only", config=TranslatorConfig(seed=7))
-    assert result.mappings[0].target_path == "aas://aas-4/submodel/default/element/value"
-    assert result.mappings[0].mapping_type.value == "equivalent"
+    assert result.mappings[0].target_path == "aas://aas-k/submodel/default/element/value"
+    assert result.mappings[0].mapping_type.value == "transform"
