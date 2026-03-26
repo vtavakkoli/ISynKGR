@@ -20,7 +20,7 @@ class Translator:
         source_standard: str,
         target_standard: str,
         source_artifact_path: str | bytes | dict,
-        mode: Literal["hybrid", "llm_only", "rag_only", "rule_only", "graph_only"] = "hybrid",
+        mode: Literal["hybrid", "llm_only", "rag_only", "rule_only", "graph_only", "embedding_only"] = "hybrid",
         config: TranslatorConfig | None = None,
         target_candidates: list[str] | None = None,
     ) -> TranslationResult:

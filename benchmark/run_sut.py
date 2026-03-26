@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import tracemalloc
 from pathlib import Path
 
 from isynkgr.icr.mapping_output_contract import validate_mapping_item
@@ -62,7 +63,7 @@ def _deduplicate_and_sort_mappings(mappings: list[dict]) -> list[dict]:
 
 
 
-def _enforce_cardinality(sample_mappings: list[dict], contract: dict, item_violations: list[dict]) -> list[dict]:
+def _enforce_cardinality(sample_mappings: list[dict], contract: dict, item_violations: list[dict], expected_target: str = "") -> list[dict]:
     expected_count = contract["expected_count"]
     if contract["mode"] == "grouped_1":
         return sample_mappings
@@ -71,8 +72,9 @@ def _enforce_cardinality(sample_mappings: list[dict], contract: dict, item_viola
 
     def _rank(mapping: dict) -> tuple[float, int]:
         confidence = float(mapping.get("confidence", 0.0))
+        target_bonus = 1 if expected_target and mapping.get("target_path") == expected_target else 0
         no_match_penalty = 1 if mapping.get("mapping_type") == MappingType.NO_MATCH.value else 0
-        return (confidence, -no_match_penalty)
+        return (confidence + target_bonus, -no_match_penalty)
 
     trimmed = sorted(sample_mappings, key=_rank, reverse=True)[:expected_count]
     item_violations.append(
@@ -131,7 +133,8 @@ def main() -> None:
         f"model={model_name} seed={seed} tier={tier} items={max_samples} config={config_path}"
     )
     cfg_data = json.loads(config_path.read_text()) if config_path.exists() else {}
-    cfg = TranslatorConfig(model_name=cfg_data.get("model_name", model_name), seed=cfg_data.get("seed", seed))
+    component_flags = json.loads(os.getenv("COMPONENT_FLAGS", "{}") or "{}")
+    cfg = TranslatorConfig(model_name=cfg_data.get("model_name", model_name), seed=cfg_data.get("seed", seed), component_flags=component_flags)
     translator = Translator(cfg)
 
     mapping_records: list[dict] = []
@@ -142,12 +145,17 @@ def main() -> None:
     llm_trace: list[dict] = []
     retrieval_trace: list[dict] = []
     sample_results: list[dict] = []
+    decision_trace: list[dict] = []
+    perf_trace: list[dict] = []
     dataset_rows = _read_dataset(dataset_dir, max_samples)
     total = len(dataset_rows)
     log(f"[SUITE] stage=translation total={total} completed=0 remaining={total}")
     seen_keys: set[tuple[str, str, str]] = set()
 
+    tracemalloc.start()
     for idx, row in enumerate(dataset_rows, start=1):
+        row_source_protocol = str(row.get("source_standard", source_protocol)).lower()
+        row_target_protocol = str(row.get("target_standard", target_protocol)).lower()
         source_path = row.get("source_path")
         if source_path:
             sample_path = Path(source_path)
@@ -160,13 +168,15 @@ def main() -> None:
         expected_source = str(row.get("mapping_source_path") or row.get("id") or "")
 
         log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
+        item_start = time.perf_counter()
         result = translator.translate(
-            source_protocol,
-            target_protocol,
+            row_source_protocol,
+            row_target_protocol,
             str(sample_path),
             mode=mode if mode != "isynkgr_hybrid" else "hybrid",
             target_candidates=[expected_target] if expected_target else None,
         )
+        item_elapsed = time.perf_counter() - item_start
         metadata = (result.provenance.metadata or {}) if result.provenance else {}
         llm_error = metadata.get("llm_error")
         if llm_error:
@@ -179,7 +189,7 @@ def main() -> None:
         sample_mappings: list[dict] = []
         for m in result.mappings:
             record = m.model_dump()
-            is_valid, violations, normalized = _validate_mapping(record, source_protocol=source_protocol, target_protocol=target_protocol, seen_keys=seen_keys)
+            is_valid, violations, normalized = _validate_mapping(record, source_protocol=row_source_protocol, target_protocol=row_target_protocol, seen_keys=seen_keys)
             if not is_valid:
                 item_violations.extend(violations)
             if normalized is not None:
@@ -201,7 +211,7 @@ def main() -> None:
 
         sample_mappings = _deduplicate_and_sort_mappings(sample_mappings)
 
-        sample_mappings = _enforce_cardinality(sample_mappings, contract, item_violations)
+        sample_mappings = _enforce_cardinality(sample_mappings, contract, item_violations, expected_target=expected_target)
 
         top_pred = sample_mappings[0] if sample_mappings else None
         llm_entry = (metadata.get("llm_raw_output") or [{}])[0]
@@ -216,6 +226,7 @@ def main() -> None:
             "llm_output": llm_entry.get("raw", {}),
         }
         llm_trace.append(llm_trace_item)
+        decision_trace.extend(metadata.get("decision_log", []))
         retrieval_trace.append(
             {
                 "sample": sample_path.name,
@@ -238,6 +249,7 @@ def main() -> None:
                 log(f"[LLM-PROMPT] sample={sample_path.name} prompt={llm_trace_item['llm_prompt']}")
             if llm_trace_item["llm_output"]:
                 log(f"[LLM-RAW] sample={sample_path.name} raw={json.dumps(llm_trace_item['llm_output'], ensure_ascii=False)}")
+        current_mem, peak_mem = tracemalloc.get_traced_memory()
 
         expected_count = contract["expected_count"]
         if contract["mode"] != "grouped_1" and len(sample_mappings) != expected_count:
@@ -261,6 +273,19 @@ def main() -> None:
                 "tier": str(row.get("tier", tier)),
                 "pair": f"{str(row.get('source_standard', source_protocol)).upper()}->{str(row.get('target_standard', target_protocol)).upper()}",
                 "matched": bool(top_pred and expected_target and top_pred.get("target_path") == expected_target),
+            }
+        )
+        perf_trace.append(
+            {
+                "sample": sample_path.name,
+                "latency_s": item_elapsed,
+                "pair": f"{str(row.get('source_standard', source_protocol)).upper()}->{str(row.get('target_standard', target_protocol)).upper()}",
+                "tier": str(row.get("tier", tier)),
+                "tokens_prompt": len(str(llm_trace_item.get("llm_prompt", "")).split()),
+                "tokens_completion": len(json.dumps(llm_trace_item.get("llm_output") or {}).split()),
+                "memory_current_bytes": current_mem,
+                "memory_peak_bytes": peak_mem,
+                "strategy": metadata.get("selected_strategy", mode),
             }
         )
 
@@ -292,6 +317,8 @@ def main() -> None:
     (predictions_dir / "llm_trace.jsonl").write_text("\n".join(json.dumps(row) for row in llm_trace) + ("\n" if llm_trace else ""))
     (predictions_dir / "retrieval_trace.jsonl").write_text("\n".join(json.dumps(row) for row in retrieval_trace) + ("\n" if retrieval_trace else ""))
     (predictions_dir / "sample_results.jsonl").write_text("\n".join(json.dumps(row) for row in sample_results) + ("\n" if sample_results else ""))
+    (predictions_dir / "decision_trace.jsonl").write_text("\n".join(json.dumps(row) for row in decision_trace) + ("\n" if decision_trace else ""))
+    (predictions_dir / "perf_trace.jsonl").write_text("\n".join(json.dumps(row) for row in perf_trace) + ("\n" if perf_trace else ""))
     (predictions_dir / "errors_summary.json").write_text(json.dumps(errors_summary, indent=2))
 
     suite_elapsed = time.perf_counter() - suite_start

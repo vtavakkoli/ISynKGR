@@ -18,9 +18,13 @@ SEEDS = [11, 23, 37]
 
 COMPONENT_FLAGS = {
     "full_framework": {},
+    "rule_based_only": {"retrieval": False, "llm": False, "adaptive_selection": False},
+    "llm_only": {"rules": False, "retrieval": False},
+    "rag_only": {"rules": False, "llm": False},
+    "embedding_similarity": {"rules": False, "llm": False},
     "ablation_no_rules": {"rules": False},
     "ablation_no_retrieval": {"retrieval": False},
-    "ablation_no_graph_expansion": {"graph_expansion": False},
+    "ablation_no_graph_expansion": {"postprocess_snap": False},
     "ablation_no_llm": {"llm": False},
     "ablation_no_reasoning_prompt": {"reasoning_prompt": False},
     "ablation_no_community_filter": {"community_filter": False},
@@ -52,31 +56,68 @@ def _artifact_paths(run_id: str) -> tuple[Path, Path]:
 def _copy_gt_and_dataset(artifacts_dir: Path) -> None:
     gt_src = Path("datasets/v1/crosswalk/gt_mappings.jsonl")
     gt_dst = artifacts_dir / "ground_truth.jsonl"
-    gt_dst.write_text(gt_src.read_text())
     rows = []
+    gt_rows = []
     tiers = ["synthetic", "noisy", "realistic"]
     difficulties = ["easy", "medium", "hard"]
+    pair_cycle = [("OPCUA", "AAS"), ("IEEE1451", "IEC61499"), ("ISO15926", "AAS")]
+    source_dir = artifacts_dir / "sources"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    max_rows = int(os.getenv("MAX_ITEMS", "180"))
     for i, line in enumerate(gt_src.read_text().splitlines()):
         if not line.strip():
             continue
         rec = ingest_mapping_payload(json.loads(line), migrate_legacy=True).model_dump()
+        source_standard, target_standard = pair_cycle[i % len(pair_cycle)]
+        source_file = source_dir / f"sample_{i:04d}_{source_standard.lower()}.json"
+        if source_standard == "OPCUA":
+            source_file = Path("datasets/v1/opcua/synthetic") / f"opcua_{i % 100:03d}.xml"
+        else:
+            payload = {
+                "standard": source_standard,
+                "classes": [{"id": f"tag_{i}", "label": "Temperature"}],
+                "relations": [{"source": f"tag_{i}", "target": f"tag_{i}_value", "type": "hasValue"}],
+                "teds": [{"id": f"teds_{i}", "name": "SensorTEDS", "channels": [{"id": "ch0", "dtype": "FLOAT", "unit": "C", "range": {"min": -50, "max": 250}}]}],
+                "devices": [{"id": f"dev_{i}", "resources": [{"id": "res1", "function_blocks": [{"id": "fb1", "type": "SIFB", "inputs": [], "outputs": [{"id": "OUT_TEMP", "dtype": "FLOAT", "unit": "C", "range": {"min": -50, "max": 250}}]}]}]}],
+            }
+            source_file.write_text(json.dumps(payload))
+        if i >= max_rows:
+            break
+        if source_standard == "OPCUA":
+            source_id = rec["source_path"]
+        elif source_standard == "IEEE1451":
+            source_id = f"ieee1451://teds{i}/ch{i % 4}/temp"
+        elif source_standard == "ISO15926":
+            source_id = f"iso15926://class{i}"
+        else:
+            source_id = f"{source_standard.lower()}://device{i}/res1/fb1/var{i % 3}"
+
+        if target_standard == "AAS":
+            target_id = rec["target_path"]
+        elif target_standard == "IEC61499":
+            target_id = f"iec61499://Device{i}/Res1/FB1/OUT_TEMP"
+        else:
+            target_id = f"{target_standard.lower()}://ns=2;s=bench{i}"
+        normalized = rec | {"source_path": source_id, "target_path": target_id}
+        gt_rows.append(normalized)
         rows.append(
             {
-                "id": rec["source_path"],
-                "mapping_source_path": rec["source_path"],
-                "target_path": rec["target_path"],
-                "source_standard": "OPCUA",
-                "target_standard": "AAS",
-                "pair": "OPCUA->AAS",
+                "id": source_id,
+                "mapping_source_path": source_id,
+                "target_path": target_id,
+                "source_standard": source_standard,
+                "target_standard": target_standard,
+                "pair": f"{source_standard}->{target_standard}",
                 "tier": tiers[i % len(tiers)],
                 "difficulty": difficulties[i % len(difficulties)],
                 "transform_requirement": "unit_convert" if i % 4 == 0 else "none",
                 "has_hard_negative": i % 7 == 0,
                 "is_no_match": i % 11 == 0,
                 "is_paraphrase": i % 5 == 0,
-                "source_path": str(Path("datasets/v1/opcua/synthetic") / f"opcua_{len(rows):03d}.xml"),
+                "source_path": str(source_file),
             }
         )
+    gt_dst.write_text("\n".join(json.dumps(r) for r in gt_rows) + "\n")
     (artifacts_dir / "dataset.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
 
 
@@ -89,7 +130,7 @@ def _run_variant(variant_name: str, artifacts_dir: Path, cfg_path: Path, logs_di
             "DATASET_DIR": str(artifacts_dir.resolve()),
             "OUTPUT_DIR": str(out_dir.resolve()),
             "CONFIG_PATH": str(cfg_path.resolve()),
-            "SUT_MODE": "hybrid",
+            "SUT_MODE": "embedding_only" if variant_name == "embedding_similarity" else ("hybrid" if variant_name == "full_framework" or variant_name.startswith("ablation_") else variant_name),
             "SEED": str(seed),
             "MAX_ITEMS": str(int(os.getenv("MAX_ITEMS", "100"))),
             "COMPONENT_FLAGS": json.dumps(COMPONENT_FLAGS.get(variant_name, {})),
@@ -139,7 +180,7 @@ def _write_error_tables(artifacts_dir: Path, rows: list[dict]) -> None:
     table_dir.mkdir(exist_ok=True)
     csv_path = table_dir / "error_summary.csv"
     with csv_path.open("w", newline="") as fp:
-        writer = csv.DictWriter(fp, fieldnames=["variant", "seed", "fp", "fn", "invalid", "wrong_transform"])
+        writer = csv.DictWriter(fp, fieldnames=["variant", "seed", "fp", "fn", "invalid", "wrong_transform", "retrieval_failure", "llm_hallucination", "cardinality_issue"])
         writer.writeheader()
         for row in rows:
             pred_dir = artifacts_dir / "predictions" / f"{row['baseline']}_seed{row['seed']}"
@@ -152,6 +193,9 @@ def _write_error_tables(artifacts_dir: Path, rows: list[dict]) -> None:
                     "fn": len(analysis.get("false_negatives", [])),
                     "invalid": len(analysis.get("invalid_path", [])),
                     "wrong_transform": len(analysis.get("wrong_transform", [])),
+                    "retrieval_failure": len(analysis.get("retrieval_failures", [])),
+                    "llm_hallucination": len(analysis.get("llm_hallucinations", [])),
+                    "cardinality_issue": len(analysis.get("cardinality_issues", [])),
                 }
             )
 

@@ -8,6 +8,7 @@ from typing import Any, Literal
 from isynkgr.adapters.aas import AASAdapter
 from isynkgr.adapters.iec61499 import IEC61499Adapter
 from isynkgr.adapters.ieee1451 import IEEE1451Adapter
+from isynkgr.adapters.iso15926 import ISO15926Adapter
 from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.canonical.model import CanonicalModel
 from isynkgr.canonical.schemas import EvidenceItem, Mapping, Provenance, TranslationResult
@@ -18,18 +19,26 @@ from isynkgr.retrieval.graphrag import GraphRAGRetriever
 from isynkgr.rules.engine import RuleEngine
 from isynkgr.utils.hashing import stable_hash
 
-Mode = Literal["hybrid", "llm_only", "rag_only", "rule_only", "graph_only"]
+Mode = Literal["hybrid", "llm_only", "rag_only", "rule_only", "graph_only", "embedding_only"]
 
 
 class TranslatorConfig:
-    def __init__(self, model_name: str = "qwen3.5:0.8b", seed: int = 42, max_repair_iterations: int = 2, enable_vector_retrieval: bool = False) -> None:
+    def __init__(
+        self,
+        model_name: str = "qwen3.5:0.8b",
+        seed: int = 42,
+        max_repair_iterations: int = 2,
+        enable_vector_retrieval: bool = False,
+        component_flags: dict[str, bool] | None = None,
+    ) -> None:
         self.model_name = model_name
         self.seed = seed
         self.max_repair_iterations = max_repair_iterations
         self.enable_vector_retrieval = enable_vector_retrieval
+        self.component_flags = component_flags or {}
 
 
-ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter(), "iec61499": IEC61499Adapter(), "ieee1451": IEEE1451Adapter()}
+ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter(), "iec61499": IEC61499Adapter(), "ieee1451": IEEE1451Adapter(), "iso15926": ISO15926Adapter()}
 
 
 def _mapping_key(mapping: Mapping) -> tuple[str, str, str]:
@@ -136,7 +145,7 @@ def _snap_mapping_to_candidates(mapping: Mapping, candidates: list[str], source_
             ((difflib.SequenceMatcher(a=mapping.target_path, b=c).ratio(), c) for c in candidates),
             reverse=True,
         )
-        if ranked and ranked[0][0] >= 0.45:
+        if ranked and ranked[0][0] >= 0.72:
             chosen = ranked[0][1]
 
     if not chosen:
@@ -172,10 +181,18 @@ class HybridPipeline:
         config: TranslatorConfig,
         target_candidates: list[str] | None = None,
     ) -> TranslationResult:
+        flags = {
+            "rules": True,
+            "retrieval": True,
+            "llm": True,
+            "adaptive_selection": True,
+            "postprocess_snap": True,
+        }
+        flags.update(config.component_flags or {})
         src = ADAPTERS[source_standard]
         tgt = ADAPTERS[target_standard]
         source_model = src.parse(source_raw)
-        evidence = self.retriever.retrieve(source_model, target_standard) if mode in {"hybrid", "rag_only", "graph_only"} else []
+        evidence = self.retriever.retrieve(source_model, target_standard) if mode in {"hybrid", "rag_only", "graph_only"} and flags["retrieval"] else []
         if target_candidates:
             for candidate in target_candidates:
                 evidence.append(
@@ -191,13 +208,39 @@ class HybridPipeline:
         mappings: list[Mapping] = []
         rejected: list[dict[str, Any]] = []
         llm_raw_output: list[dict[str, Any]] = []
+        decision_log: list[dict[str, Any]] = []
 
-        if mode in {"hybrid", "rule_only"}:
+        retrieval_top_score = max((float(item.score) for item in evidence), default=0.0)
+        schema_match_signal = 1.0 if source_standard != target_standard else 0.5
+        default_strategy = "rules" if schema_match_signal >= 0.7 else "llm"
+        selected_strategy = default_strategy
+        if mode == "hybrid" and flags["adaptive_selection"]:
+            if retrieval_top_score >= 0.95 and flags["retrieval"]:
+                selected_strategy = "retrieval"
+            elif schema_match_signal >= 0.75 and flags["rules"]:
+                selected_strategy = "rules"
+            elif flags["llm"]:
+                selected_strategy = "llm"
+            else:
+                selected_strategy = "rules"
+            decision_log.append(
+                {
+                    "mode": mode,
+                    "selected_strategy": selected_strategy,
+                    "signals": {
+                        "retrieval_top_score": retrieval_top_score,
+                        "schema_match_signal": schema_match_signal,
+                    },
+                }
+            )
+
+        run_rules = mode in {"hybrid", "rule_only"} and flags["rules"] and (mode != "hybrid" or selected_strategy == "rules")
+        if run_rules:
             rule_mappings = self.rules.apply_rules(source_model, target_standard)
             rule_report = normalize_mapping_items([m.model_dump() for m in rule_mappings], source_standard, target_standard, method="rule")
             mappings.extend(rule_report.accepted)
             rejected.extend([item.model_dump() for item in rule_report.rejected])
-        elif mode == "graph_only":
+        elif mode in {"graph_only", "embedding_only"} or (mode == "hybrid" and selected_strategy == "retrieval"):
             graph_report = normalize_mapping_items(
                 [m.model_dump() for m in _emit_graph_only_mappings(source_model, evidence, source_standard, target_standard)],
                 source_standard,
@@ -208,7 +251,8 @@ class HybridPipeline:
             rejected.extend([item.model_dump() for item in graph_report.rejected])
 
         llm_error = None
-        if mode in {"hybrid", "llm_only", "rag_only"}:
+        run_llm = mode in {"hybrid", "llm_only", "rag_only"} and flags["llm"] and (mode != "hybrid" or selected_strategy == "llm")
+        if run_llm:
             prompt = build_mapping_prompt(
                 source_protocol=source_standard,
                 target_protocol=target_standard,
@@ -230,7 +274,10 @@ class HybridPipeline:
             llm_error = raw.get("_llm_error")
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
             candidates = _candidate_paths(evidence, target_standard)
-            mappings.extend([_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted])
+            if flags["postprocess_snap"]:
+                mappings.extend([_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted])
+            else:
+                mappings.extend(llm_report.accepted)
             rejected.extend([item.model_dump() for item in llm_report.rejected])
 
 
@@ -268,6 +315,9 @@ class HybridPipeline:
             "mode": mode,
             "rejected_mappings": rejected,
             "llm_raw_output": llm_raw_output,
+            "decision_log": decision_log,
+            "selected_strategy": selected_strategy if mode == "hybrid" else mode,
+            "signals": {"retrieval_top_score": retrieval_top_score, "schema_match_signal": schema_match_signal},
         }
         if llm_error is not None:
             metadata["llm_error"] = llm_error
