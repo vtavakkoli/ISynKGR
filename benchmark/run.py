@@ -15,14 +15,17 @@ from urllib.parse import urlparse
 from benchmark.evaluate import evaluate_run
 from isynkgr.icr.mapping_schema import ingest_mapping_payload
 
-SCENARIO_MODE = {
-    "baseline": "rule_only",
-    "full_framework": "isynkgr_hybrid",
-    "ablation_no_graphrag": "llm_only",
-    "ablation_no_parallel": "rag_only",
-    "ablation_no_community": "graph_only",
-    "ablation_no_reasoning": "rule_only",
+SCENARIO_SETTINGS = {
+    "baseline": {"mode": "rule_only", "component_flags": {}},
+    "full_framework": {"mode": "isynkgr_hybrid", "component_flags": {}},
+    "ablation_no_graphrag": {"mode": "llm_only", "component_flags": {}},
+    "ablation_no_parallel": {"mode": "rag_only", "component_flags": {}},
+    "ablation_no_community": {"mode": "graph_only", "component_flags": {}},
+    "ablation_no_reasoning": {"mode": "llm_only", "component_flags": {"postprocess_snap": False}},
 }
+
+# Backward-compatible mapping used by validation utilities/tests that import SCENARIO_MODE.
+SCENARIO_MODE = {name: settings["mode"] for name, settings in SCENARIO_SETTINGS.items()}
 
 
 def normalize_ollama_host(raw_host: str) -> str:
@@ -118,7 +121,9 @@ def _cardinality_contract_for_sample(gt_row: dict) -> dict:
 
 def run_scenario(args: argparse.Namespace) -> int:
     scenario = args.scenario
-    mode = SCENARIO_MODE[scenario]
+    scenario_cfg = SCENARIO_SETTINGS[scenario]
+    mode = scenario_cfg["mode"]
+    component_flags = scenario_cfg["component_flags"]
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = out_dir / "logs"
@@ -146,7 +151,7 @@ def run_scenario(args: argparse.Namespace) -> int:
     dataset_path.write_text("\n".join(json.dumps(r) for r in dataset_rows) + "\n")
     output_dir = Path(out_dir / "predictions")
     print(
-        f"[SCENARIO] name={scenario} mode={mode} samples={dataset_items} "
+        f"[SCENARIO] name={scenario} mode={mode} component_flags={component_flags} samples={dataset_items} "
         f"dataset_path={dataset_path} gt_path={gt_path} output_path={output_dir}",
         flush=True,
     )
@@ -184,6 +189,8 @@ def run_scenario(args: argparse.Namespace) -> int:
             "MAX_ITEMS": str(dataset_items),
             "TIER": args.tier,
             "OLLAMA_BASE_URL": ollama_host,
+            "COMPONENT_FLAGS": json.dumps(component_flags),
+            "ALLOW_TARGET_HINTS": "0",
         }
     )
     Path(env["OUTPUT_DIR"]).mkdir(parents=True, exist_ok=True)
@@ -209,7 +216,7 @@ def run_scenario(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scenario", required=True, choices=sorted(SCENARIO_MODE))
+    parser.add_argument("--scenario", required=True, choices=sorted(SCENARIO_SETTINGS))
     parser.add_argument("--config", default="benchmark/config.json")
     parser.add_argument("--out", required=True)
     parser.add_argument("--ollama-host", default=os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434"))
