@@ -169,12 +169,13 @@ def main() -> None:
 
         log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
         item_start = time.perf_counter()
+        allow_gt_hints = str(os.getenv("ALLOW_TARGET_HINTS", "0")).strip().lower() in {"1", "true", "yes"}
         result = translator.translate(
             row_source_protocol,
             row_target_protocol,
             str(sample_path),
             mode=mode if mode != "isynkgr_hybrid" else "hybrid",
-            target_candidates=[expected_target] if expected_target else None,
+            target_candidates=[expected_target] if (allow_gt_hints and expected_target) else None,
         )
         item_elapsed = time.perf_counter() - item_start
         metadata = (result.provenance.metadata or {}) if result.provenance else {}
@@ -215,6 +216,7 @@ def main() -> None:
 
         top_pred = sample_mappings[0] if sample_mappings else None
         llm_entry = (metadata.get("llm_raw_output") or [{}])[0]
+        component_debug = metadata.get("component_outputs", {})
         llm_trace_item = {
             "sample": sample_path.name,
             "mode": mode,
@@ -249,6 +251,16 @@ def main() -> None:
                 log(f"[LLM-PROMPT] sample={sample_path.name} prompt={llm_trace_item['llm_prompt']}")
             if llm_trace_item["llm_output"]:
                 log(f"[LLM-RAW] sample={sample_path.name} raw={json.dumps(llm_trace_item['llm_output'], ensure_ascii=False)}")
+        log(
+            "[COMPONENT-TRACE] "
+            f"sample={sample_path.name} "
+            f"input={sample_path} "
+            f"rule={json.dumps(component_debug.get('rule_engine', []), ensure_ascii=False)} "
+            f"retrieval={json.dumps(component_debug.get('retrieval', []), ensure_ascii=False)} "
+            f"llm={json.dumps(component_debug.get('llm', []), ensure_ascii=False)} "
+            f"merged={json.dumps(component_debug.get('merged', [m.model_dump() for m in result.mappings]), ensure_ascii=False)} "
+            f"ground_truth={expected_target}"
+        )
         current_mem, peak_mem = tracemalloc.get_traced_memory()
 
         expected_count = contract["expected_count"]

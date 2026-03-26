@@ -94,9 +94,14 @@ def _emit_graph_only_mappings(
     target_standard: str,
 ) -> list[Mapping]:
     candidates = _candidate_paths(evidence, target_standard)
+    def _is_valid_benchmark_target(path: str) -> bool:
+        if target_standard.lower() != "aas":
+            return bool(path)
+        return path.startswith("aas://aas-") and "/submodel/default/element/value" in path
+
     mappings: list[Mapping] = []
     for idx, node in enumerate(source_model.nodes):
-        if idx < len(candidates):
+        if idx < len(candidates) and _is_valid_benchmark_target(candidates[idx]):
             mappings.append(
                 normalize_mapping_item(
                     {
@@ -234,11 +239,18 @@ class HybridPipeline:
                 }
             )
 
-        run_rules = mode in {"hybrid", "rule_only"} and flags["rules"] and (mode != "hybrid" or selected_strategy == "rules")
+        component_outputs: dict[str, list[dict[str, Any]]] = {"rule_engine": [], "retrieval": [], "llm": [], "merged": []}
+        component_outputs["retrieval"] = [
+            {"id": item.id, "score": item.score, "payload": item.payload}
+            for item in evidence
+        ]
+
+        run_rules = mode in {"hybrid", "rule_only"} and flags["rules"]
         if run_rules:
             rule_mappings = self.rules.apply_rules(source_model, target_standard)
             rule_report = normalize_mapping_items([m.model_dump() for m in rule_mappings], source_standard, target_standard, method="rule")
             mappings.extend(rule_report.accepted)
+            component_outputs["rule_engine"] = [m.model_dump() for m in rule_report.accepted]
             rejected.extend([item.model_dump() for item in rule_report.rejected])
         elif mode in {"graph_only", "embedding_only"} or (mode == "hybrid" and selected_strategy == "retrieval"):
             graph_report = normalize_mapping_items(
@@ -248,10 +260,12 @@ class HybridPipeline:
                 method="graph",
             )
             mappings.extend(graph_report.accepted)
+            component_outputs["rule_engine"] = [m.model_dump() for m in graph_report.accepted]
             rejected.extend([item.model_dump() for item in graph_report.rejected])
 
         llm_error = None
-        run_llm = mode in {"hybrid", "llm_only", "rag_only"} and flags["llm"] and (mode != "hybrid" or selected_strategy == "llm")
+        run_llm = mode in {"hybrid", "llm_only", "rag_only"} and flags["llm"]
+        llm_mappings: list[Mapping] = []
         if run_llm:
             prompt = build_mapping_prompt(
                 source_protocol=source_standard,
@@ -275,10 +289,21 @@ class HybridPipeline:
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
             candidates = _candidate_paths(evidence, target_standard)
             if flags["postprocess_snap"]:
-                mappings.extend([_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted])
+                llm_mappings = [_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted]
             else:
-                mappings.extend(llm_report.accepted)
+                llm_mappings = llm_report.accepted
+            mappings.extend(llm_mappings)
+            component_outputs["llm"] = [m.model_dump() for m in llm_mappings]
             rejected.extend([item.model_dump() for item in llm_report.rejected])
+        if mode == "rag_only" and not llm_mappings:
+            graph_report = normalize_mapping_items(
+                [m.model_dump() for m in _emit_graph_only_mappings(source_model, evidence, source_standard, target_standard)],
+                source_standard,
+                target_standard,
+                method="graph_fallback",
+            )
+            mappings.extend(graph_report.accepted)
+            rejected.extend([item.model_dump() for item in graph_report.rejected])
 
 
         if not mappings:
@@ -311,11 +336,13 @@ class HybridPipeline:
         target_model = CanonicalModel(standard=target_standard, nodes=source_model.nodes, edges=source_model.edges)
         target_artifact = tgt.serialize(target_model, [m.model_dump() for m in mappings])
         validation = tgt.validate(target_artifact)
+        component_outputs["merged"] = [m.model_dump() for m in mappings]
         metadata: dict[str, Any] = {
             "mode": mode,
             "rejected_mappings": rejected,
             "llm_raw_output": llm_raw_output,
             "decision_log": decision_log,
+            "component_outputs": component_outputs,
             "selected_strategy": selected_strategy if mode == "hybrid" else mode,
             "signals": {"retrieval_top_score": retrieval_top_score, "schema_match_signal": schema_match_signal},
         }

@@ -56,8 +56,15 @@ def _resolve_gt_path(out_dir: Path) -> Path:
     raise FileNotFoundError("Ground truth not found.")
 
 
+def _resolve_pred_path(out_dir: Path) -> Path:
+    for path in [out_dir / "mappings.jsonl", out_dir / "predictions" / "mappings.jsonl"]:
+        if path.exists():
+            return path
+    raise FileNotFoundError(f"Predictions not found under {out_dir}")
+
+
 def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
-    pred_path = out_dir / "mappings.jsonl"
+    pred_path = _resolve_pred_path(out_dir)
     gt_path = _resolve_gt_path(out_dir)
     pred_rows_raw = _load_jsonl_rows(pred_path)
     gt_rows_raw = _load_jsonl_rows(gt_path)
@@ -76,7 +83,8 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
 
     transform_total = sum(1 for row in gt_rows if row.get("mapping_type") == "transform")
     transform_correct = sum(1 for row in gt_rows if row.get("mapping_type") == "transform" and _mapping_key(row) in pred_keys)
-    path_validity = 1.0 - (sum((violation_counts(reports) or {}).values()) / max(len(reports), 1))
+    invalid_report_count = sum(1 for report in reports if not report.get("valid"))
+    path_validity = 1.0 - (invalid_report_count / max(len(reports), 1))
 
     confidence_pairs = []
     for row in pred_rows:
