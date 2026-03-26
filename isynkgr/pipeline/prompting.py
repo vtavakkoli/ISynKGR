@@ -42,6 +42,10 @@ def _target_summary(evidence: list[EvidenceItem], target_protocol: str, max_item
             continue
         seen.add(path)
         fallback.append({"path": path, "name": item.text, "description": item.kind, "exact_candidate": False})
+    if target_protocol.lower() == "aas":
+        benchmark_exact = [row for row in exact if row["path"].startswith("aas://aas-") and row["path"].endswith("/submodel/default/element/value")]
+        if benchmark_exact:
+            exact = benchmark_exact
     rows = exact if exact else fallback
     return rows[:max_items]
 
