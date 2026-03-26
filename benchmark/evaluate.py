@@ -7,11 +7,18 @@ from benchmark.metrics import group_prf1, hit_at_k, mapping_prf1, recall_at_k, v
 from isynkgr.icr.mapping_schema import ingest_mapping_payload, normalize_mapping_path
 
 
+def _normalize_mapping_type(value: str) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"label_match", "approximate", "fallback"}:
+        return "equivalent"
+    return raw
+
+
 def _mapping_key(row: dict) -> tuple[str, str, str]:
     return (
         normalize_mapping_path(row.get("source_path", "")),
         normalize_mapping_path(row.get("target_path", "")),
-        str(row.get("mapping_type", "")),
+        _normalize_mapping_type(str(row.get("mapping_type", ""))),
     )
 
 

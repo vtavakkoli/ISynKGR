@@ -72,6 +72,36 @@ def test_prompt_prefers_exact_target_candidates() -> None:
     assert "Do not invent a new target_path" in prompt
 
 
+def test_prompt_filters_non_benchmark_aas_candidates() -> None:
+    source = CanonicalModel(standard="opcua", nodes=[CanonicalNode(id="opcua://ns=2;i=1000", type="signal", label="Pump0")], edges=[])
+    evidence = [
+        EvidenceItem(
+            id="candidate:bad",
+            kind="target_candidate",
+            text="aas://candidate/Pump0",
+            score=0.9,
+            payload={"candidate_path": "aas://candidate/Pump0"},
+        ),
+        EvidenceItem(
+            id="candidate:good",
+            kind="target_candidate",
+            text="aas://aas-0/submodel/default/element/value",
+            score=1.0,
+            payload={"candidate_path": "aas://aas-0/submodel/default/element/value"},
+        ),
+    ]
+    prompt = build_mapping_prompt(
+        source_protocol="opcua",
+        target_protocol="aas",
+        source_schema_summary={"standard": "opcua"},
+        target_schema_summary={"standard": "aas"},
+        source_model=source,
+        evidence=evidence,
+    )
+    assert "aas://aas-0/submodel/default/element/value" in prompt
+    assert "aas://candidate/Pump0" not in prompt
+
+
 def test_invented_paths_snap_to_exact_candidate(monkeypatch) -> None:
     from isynkgr.pipeline import hybrid as hybrid_mod
 
@@ -87,3 +117,25 @@ def test_invented_paths_snap_to_exact_candidate(monkeypatch) -> None:
     )
     assert result.mappings[0].target_path == "aas://aas-0/submodel/default/element/value"
 
+
+def test_graph_only_emits_final_target_candidates(monkeypatch) -> None:
+    from isynkgr.pipeline import hybrid as hybrid_mod
+
+    class _GraphRetriever:
+        def retrieve(self, *_args, **_kwargs):
+            return [
+                EvidenceItem(
+                    id="candidate:good",
+                    kind="target_candidate",
+                    text="aas://aas-0/submodel/default/element/value",
+                    score=1.0,
+                    payload={"candidate_path": "aas://aas-0/submodel/default/element/value"},
+                )
+            ]
+
+    monkeypatch.setattr(hybrid_mod, "ADAPTERS", {"opcua": _FakeAdapter("opcua"), "aas": _FakeAdapter("aas"), "iec61499": _FakeAdapter("iec61499")})
+    pipeline = HybridPipeline(llm=_InventingLLM(), retriever=_GraphRetriever(), rules=RuleEngine())
+    result = pipeline.run("opcua", "aas", source_raw="x", mode="graph_only", config=TranslatorConfig(seed=7))
+    assert result.mappings
+    assert result.mappings[0].target_path == "aas://aas-0/submodel/default/element/value"
+    assert result.mappings[0].mapping_type.value == "equivalent"

@@ -75,3 +75,36 @@ def test_evaluate_run_mismatch_diagnostics_section(tmp_path):
     assert "mismatch_diagnostics" in metrics
     assert metrics["mismatch_diagnostics"]["pred_only_count"] == 1
     assert metrics["mismatch_diagnostics"]["gt_only_count"] == 1
+
+
+def test_evaluate_run_treats_label_match_as_equivalent(tmp_path):
+    out_dir = tmp_path / "predictions"
+    out_dir.mkdir(parents=True)
+
+    pred_rows = [
+        {
+            "source_path": "opcua://ns=2;i=1000",
+            "target_path": "aas://aas-0/submodel/default/element/value",
+            "mapping_type": "label_match",
+            "confidence": 0.95,
+            "rationale": "rule style mapping",
+            "evidence": [],
+        }
+    ]
+    gt_rows = [
+        {
+            "source_path": "opcua://ns=2;i=1000",
+            "target_path": "aas://aas-0/submodel/default/element/value",
+            "mapping_type": "equivalent",
+            "confidence": 1.0,
+            "rationale": "ground truth",
+            "evidence": [],
+        }
+    ]
+
+    _write_jsonl(out_dir / "mappings.jsonl", pred_rows)
+    _write_jsonl(tmp_path / "ground_truth.jsonl", gt_rows)
+
+    metrics = evaluate_run(out_dir)
+    assert metrics["matched_count"] == 1
+    assert metrics["f1"] == 1.0

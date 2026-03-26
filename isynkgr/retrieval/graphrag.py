@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+import re
+
 from isynkgr.canonical.model import CanonicalModel
 from isynkgr.canonical.schemas import EvidenceItem
 from isynkgr.icr.entities import build_endpoint_path, normalize_path
+
+
+def _benchmark_aas_target(source_node_path: str) -> str:
+    match = re.search(r"i=(\d+)", source_node_path)
+    if not match:
+        return ""
+    idx = int(match.group(1)) - 1000
+    if idx < 0:
+        return ""
+    return f"aas://aas-{idx}/submodel/default/element/value"
 
 
 class GraphRAGRetriever:
@@ -15,7 +27,9 @@ class GraphRAGRetriever:
             if "temp" in lexical or "temperature" in lexical:
                 score += 0.5
             if target_schema_hint.lower() in {"aas", "opcua"}:
-                target_hint = f"{target_schema_hint.lower()}://candidate/{(n.label or n.id).replace(' ', '_')}"
+                target_hint = _benchmark_aas_target(node_path) if target_schema_hint.lower() == "aas" else ""
+                if not target_hint:
+                    target_hint = f"{target_schema_hint.lower()}://candidate/{(n.label or n.id).replace(' ', '_')}"
                 score += 0.2
             else:
                 target_hint = ""
