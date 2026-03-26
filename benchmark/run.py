@@ -24,6 +24,9 @@ SCENARIO_SETTINGS = {
     "ablation_no_reasoning": {"mode": "llm_only", "component_flags": {"postprocess_snap": False}},
 }
 
+# Backward-compatible mapping used by validation utilities/tests that import SCENARIO_MODE.
+SCENARIO_MODE = {name: settings["mode"] for name, settings in SCENARIO_SETTINGS.items()}
+
 
 def normalize_ollama_host(raw_host: str) -> str:
     value = (raw_host or "").strip()
