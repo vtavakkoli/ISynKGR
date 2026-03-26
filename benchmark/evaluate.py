@@ -71,6 +71,8 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
     reports = json.loads((out_dir / "validation.json").read_text()) if (out_dir / "validation.json").exists() else []
     retrieval_rows = _load_optional_jsonl(out_dir / "predictions" / "retrieval_trace.jsonl")
     sample_rows = _load_optional_jsonl(out_dir / "predictions" / "sample_results.jsonl")
+    perf_rows = _load_optional_jsonl(out_dir / "predictions" / "perf_trace.jsonl")
+    decision_rows = _load_optional_jsonl(out_dir / "predictions" / "decision_trace.jsonl")
 
     transform_total = sum(1 for row in gt_rows if row.get("mapping_type") == "transform")
     transform_correct = sum(1 for row in gt_rows if row.get("mapping_type") == "transform" and _mapping_key(row) in pred_keys)
@@ -123,6 +125,12 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
         "gt_path_used": str(gt_path),
         "pred_path_used": str(pred_path),
         "benchmark_target_shape_rate": benchmark_target_shape_rate,
+        "latency_per_sample_s": sum(float(r.get("latency_s", 0.0)) for r in perf_rows) / len(perf_rows) if perf_rows else 0.0,
+        "runtime_per_scenario_s": sum(float(r.get("latency_s", 0.0)) for r in perf_rows),
+        "token_usage_prompt": sum(int(r.get("tokens_prompt", 0)) for r in perf_rows),
+        "token_usage_completion": sum(int(r.get("tokens_completion", 0)) for r in perf_rows),
+        "memory_peak_mb": (max((int(r.get("memory_peak_bytes", 0)) for r in perf_rows), default=0) / (1024 * 1024)),
+        "adaptive_strategy_usage": {},
     }
 
     if sample_rows:
@@ -133,6 +141,12 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
             pair_rows.setdefault(row.get("pair", "unknown"), []).append(row)
         score["per_tier"] = {k: {"count": len(v), "accuracy": sum(1 for x in v if x.get("matched")) / len(v)} for k, v in tier_rows.items()}
         score["per_pair"] = {k: {"count": len(v), "accuracy": sum(1 for x in v if x.get("matched")) / len(v)} for k, v in pair_rows.items()}
+    if decision_rows:
+        usage: dict[str, int] = {}
+        for row in decision_rows:
+            strategy = str(row.get("selected_strategy", "unknown"))
+            usage[strategy] = usage.get(strategy, 0) + 1
+        score["adaptive_strategy_usage"] = usage
 
     score["counts"] = {
         "ground_truth": {"raw": len(gt_rows_raw), "deduplicated": len(gt_rows)},
@@ -156,6 +170,17 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
             for row in gt_rows
             if row.get("mapping_type") == "transform" and _mapping_key(row) not in pred_keys
         ],
+        "retrieval_failures": [
+            {"sample": row.get("sample"), "root_cause": "retrieval_failure"}
+            for row in retrieval_rows
+            if row.get("expected_target_path") and row.get("expected_target_path") not in [c.get("path") for c in (row.get("candidates") or [])]
+        ],
+        "llm_hallucinations": [
+            {"sample": row.get("sample"), "predicted": (row.get("predicted_top") or {}).get("target_path"), "expected": row.get("expected_target_path"), "root_cause": "llm_hallucination"}
+            for row in _load_optional_jsonl(out_dir / "predictions" / "llm_trace.jsonl")
+            if row.get("expected_target_path") and (row.get("predicted_top") or {}).get("target_path") not in {"", row.get("expected_target_path")}
+        ],
+        "cardinality_issues": [r for r in invalid if any(v.get("type", "").startswith("cardinality_") for v in r.get("violations", []))],
     }
     (out_dir / "error_analysis.json").write_text(json.dumps(errors, indent=2))
     return score

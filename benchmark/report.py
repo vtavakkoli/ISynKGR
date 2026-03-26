@@ -169,6 +169,13 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "Top Violations",
         "count",
     )
+    _bar_chart(
+        plots_dir / "cost_vs_performance.png",
+        [r["scenario"] for r in ranked_f1],
+        [float(next((x.get("runtime_per_scenario_s", 0.0) for x in rows if _scenario_name(x) == r["scenario"]), 0.0)) for r in ranked_f1],
+        "Runtime Cost by Scenario",
+        "runtime_s",
+    )
 
     summary_table = html.escape(_markdown_table(summary_rows, ["scenario", "f1", "validity_pass_rate"]))
     validity_table = html.escape(_markdown_table(validity_breakdown, ["reason", "count"]))
@@ -185,6 +192,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 <li><img alt="F1 by scenario" src="plots/f1_by_scenario.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Validity by scenario" src="plots/validity_by_scenario.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Top violations" src="plots/top_violations.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="Cost vs performance" src="plots/cost_vs_performance.png" style="max-width:100%;height:auto" /></li>
 </ul>
 <h2>Raw JSON details</h2>
 <details>
