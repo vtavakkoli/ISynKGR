@@ -13,6 +13,7 @@ from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.canonical.model import CanonicalModel
 from isynkgr.canonical.schemas import EvidenceItem, Mapping, Provenance, TranslationResult
 from isynkgr.icr.mapping_output_contract import normalize_mapping_item, normalize_mapping_items
+from isynkgr.icr.path_validation import validate_protocol_path
 from isynkgr.llm.ollama import OllamaClient
 from isynkgr.pipeline.prompting import build_mapping_prompt
 from isynkgr.retrieval.graphrag import GraphRAGRetriever
@@ -74,9 +75,6 @@ def _candidate_paths(evidence: list[Any], target_standard: str) -> list[str]:
         candidate = str(payload.get("candidate_path") or payload.get("target_hint") or "").strip()
         if candidate.startswith(prefix):
             out.append(candidate)
-    canonical = [c for c in out if c.startswith("aas://aas-") and c.endswith("/submodel/default/element/value")]
-    if canonical:
-        out = canonical
     # preserve order and de-duplicate
     seen: set[str] = set()
     dedup: list[str] = []
@@ -94,23 +92,26 @@ def _emit_graph_only_mappings(
     target_standard: str,
 ) -> list[Mapping]:
     candidates = _candidate_paths(evidence, target_standard)
-    def _is_valid_benchmark_target(path: str) -> bool:
-        if target_standard.lower() != "aas":
-            return bool(path)
-        return path.startswith("aas://aas-") and "/submodel/default/element/value" in path
-
     mappings: list[Mapping] = []
     for idx, node in enumerate(source_model.nodes):
-        if idx < len(candidates) and _is_valid_benchmark_target(candidates[idx]):
+        candidate = candidates[idx] if idx < len(candidates) else ""
+        candidate_ok = False
+        if candidate:
+            try:
+                validate_protocol_path(candidate, "target_path")
+                candidate_ok = True
+            except ValueError:
+                candidate_ok = False
+        if candidate_ok:
             mappings.append(
                 normalize_mapping_item(
                     {
                         "source_path": node.id,
-                        "target_path": candidates[idx],
+                        "target_path": candidate,
                         "mapping_type": "equivalent",
                         "transform": None,
                         "confidence": 0.8,
-                        "rationale": "Graph retrieval selected a benchmark-shaped target candidate.",
+                        "rationale": "Graph retrieval selected the highest ranked target candidate.",
                         "evidence": ["graph:target_candidate"],
                     },
                     source_standard,
@@ -163,7 +164,7 @@ def _snap_mapping_to_candidates(mapping: Mapping, candidates: list[str], source_
             "mapping_type": mapping.mapping_type.value,
             "transform": mapping.transform.model_dump() if mapping.transform else None,
             "confidence": mapping.confidence,
-            "rationale": f"{mapping.rationale} Target path snapped to benchmark candidate.",
+            "rationale": f"{mapping.rationale} Target path snapped to retrieval candidate.",
             "evidence": [*mapping.evidence, "postprocess:candidate_snap"],
         },
         source_standard,
@@ -192,12 +193,19 @@ class HybridPipeline:
             "llm": True,
             "adaptive_selection": True,
             "postprocess_snap": True,
+            "reasoning_prompt": True,
+            "community_filter": True,
+            "parallel_retrieval": True,
         }
         flags.update(config.component_flags or {})
         src = ADAPTERS[source_standard]
         tgt = ADAPTERS[target_standard]
         source_model = src.parse(source_raw)
         evidence = self.retriever.retrieve(source_model, target_standard) if mode in {"hybrid", "rag_only", "graph_only"} and flags["retrieval"] else []
+        if evidence and not flags["community_filter"]:
+            evidence = sorted(evidence, key=lambda item: float(item.score), reverse=True)[: max(1, len(evidence) // 3)]
+        if evidence and not flags["parallel_retrieval"]:
+            evidence = evidence[:1]
         if target_candidates:
             for candidate in target_candidates:
                 evidence.append(
@@ -245,7 +253,10 @@ class HybridPipeline:
             for item in evidence
         ]
 
-        run_rules = mode in {"hybrid", "rule_only"} and flags["rules"]
+        run_rules = (
+            (mode == "rule_only" and flags["rules"])
+            or (mode == "hybrid" and flags["rules"] and (not flags["adaptive_selection"] or selected_strategy == "rules"))
+        )
         if run_rules:
             rule_mappings = self.rules.apply_rules(source_model, target_standard)
             rule_report = normalize_mapping_items([m.model_dump() for m in rule_mappings], source_standard, target_standard, method="rule")
@@ -264,7 +275,10 @@ class HybridPipeline:
             rejected.extend([item.model_dump() for item in graph_report.rejected])
 
         llm_error = None
-        run_llm = mode in {"hybrid", "llm_only", "rag_only"} and flags["llm"]
+        run_llm = (
+            (mode in {"llm_only", "rag_only"} and flags["llm"])
+            or (mode == "hybrid" and flags["llm"] and (not flags["adaptive_selection"] or selected_strategy == "llm"))
+        )
         llm_mappings: list[Mapping] = []
         if run_llm:
             prompt = build_mapping_prompt(
@@ -274,6 +288,7 @@ class HybridPipeline:
                 target_schema_summary={"standard": target_standard},
                 source_model=source_model,
                 evidence=evidence,
+                use_reasoning_prompt=flags["reasoning_prompt"],
             )
             raw = self.llm.complete_json(prompt, "MappingOutputContract", config.seed)
             llm_raw_output.append(
