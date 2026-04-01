@@ -332,16 +332,16 @@ class HybridPipeline:
             llm_error = raw.get("_llm_error")
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
             candidates = _candidate_paths(evidence, target_standard)
-            if flags.get("constrain_llm_to_candidates", True):
-                llm_candidates_constrained = [_constrain_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted]
-            else:
-                llm_candidates_constrained = llm_report.accepted
             if flags["postprocess_snap"]:
-                snapped = [_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_candidates_constrained]
-                snapped_to_candidate = any(m.target_path != n.target_path for m, n in zip(llm_candidates_constrained, snapped))
-                llm_mappings = snapped
+                snapped = [_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted]
+                snapped_to_candidate = any(m.target_path != n.target_path for m, n in zip(llm_report.accepted, snapped))
+                llm_candidates = snapped
             else:
-                llm_mappings = llm_candidates_constrained
+                llm_candidates = llm_report.accepted
+            if flags.get("constrain_llm_to_candidates", True):
+                llm_mappings = [_constrain_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_candidates]
+            else:
+                llm_mappings = llm_candidates
             mappings.extend(llm_mappings)
             component_outputs["llm"] = [m.model_dump() for m in llm_mappings]
             rejected.extend([item.model_dump() for item in llm_report.rejected])
