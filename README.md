@@ -6,7 +6,6 @@ ISynKGR is an industrial schema-mapping benchmark and translation framework that
 - optional LLM mapping,
 - and reproducible evaluation/reporting.
 
-This repository now focuses on **honest, reproducible comparisons** between the full framework, baselines, and ablations.
 
 ## Architecture
 
