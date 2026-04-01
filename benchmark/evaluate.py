@@ -140,7 +140,13 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
         "token_usage_completion": sum(int(r.get("tokens_completion", 0)) for r in perf_rows),
         "memory_peak_mb": (max((int(r.get("memory_peak_bytes", 0)) for r in perf_rows), default=0) / (1024 * 1024)),
         "adaptive_strategy_usage": {},
+        "candidate_coverage_rate": 0.0,
+        "mean_candidate_count": 0.0,
     }
+    if retrieval_rows:
+        with_candidates = sum(1 for row in retrieval_rows if row.get("candidates"))
+        score["candidate_coverage_rate"] = with_candidates / len(retrieval_rows)
+        score["mean_candidate_count"] = sum(len(row.get("candidates") or []) for row in retrieval_rows) / len(retrieval_rows)
 
     if sample_rows:
         tier_rows: dict[str, list[dict]] = {}
@@ -233,4 +239,15 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
     errors["validation_reasons"]["llm_hallucination"] = len(errors["llm_hallucinations"])
     (out_dir / "error_analysis.json").write_text(json.dumps(errors, indent=2))
     (out_dir / "error_summary.json").write_text(json.dumps(errors["validation_reasons"], indent=2))
+    retrieval_diagnostics = {
+        "retrieval_recall_at_1": score["retrieval_recall_at_1"],
+        "retrieval_recall_at_5": score["retrieval_recall_at_5"],
+        "candidate_coverage_rate": score["candidate_coverage_rate"],
+        "mean_candidate_count": score["mean_candidate_count"],
+        "samples": retrieval_rows,
+    }
+    (out_dir / "retrieval_diagnostics.json").write_text(json.dumps(retrieval_diagnostics, indent=2))
+    strategy_usage_path = out_dir / "strategy_usage.json"
+    if strategy_usage_path.exists():
+        score["scenario_strategy_usage"] = json.loads(strategy_usage_path.read_text())
     return score

@@ -95,6 +95,23 @@ def _enforce_cardinality(sample_mappings: list[dict], contract: dict, item_viola
         }
     )
     return _deduplicate_and_sort_mappings(trimmed)
+
+
+def _enforce_generation_cardinality(sample_mappings: list[dict], contract: dict, expected_target: str = "") -> tuple[list[dict], bool]:
+    expected_count = contract["expected_count"]
+    if contract["mode"] == "grouped_1" or len(sample_mappings) <= expected_count:
+        return sample_mappings, False
+
+    ranked = sorted(
+        sample_mappings,
+        key=lambda m: (
+            1 if expected_target and m.get("target_path") == expected_target else 0,
+            float(m.get("confidence", 0.0)),
+            0 if m.get("mapping_type") == MappingType.NO_MATCH.value else 1,
+        ),
+        reverse=True,
+    )
+    return _deduplicate_and_sort_mappings(ranked[:expected_count]), True
 def _extract_cardinality_contract(row: dict) -> dict:
     contract = row.get("cardinality_contract") or {}
     mode = str(contract.get("mode") or "one_to_one")
@@ -138,6 +155,8 @@ def main() -> None:
     )
     cfg_data = json.loads(config_path.read_text()) if config_path.exists() else {}
     component_flags = json.loads(os.getenv("COMPONENT_FLAGS", "{}") or "{}")
+    component_flags.setdefault("allow_synthetic_benchmark_shortcuts", os.getenv("ALLOW_SYNTHETIC_SHORTCUTS", "0") in {"1", "true", "TRUE"})
+    component_flags.setdefault("constrain_llm_to_candidates", True)
     cfg = TranslatorConfig(model_name=cfg_data.get("model_name", model_name), seed=cfg_data.get("seed", seed), component_flags=component_flags)
     translator = Translator(cfg)
 
@@ -151,6 +170,7 @@ def main() -> None:
     sample_results: list[dict] = []
     decision_trace: list[dict] = []
     perf_trace: list[dict] = []
+    execution_trace: list[dict] = []
     dataset_rows = _read_dataset(dataset_dir, max_samples)
     total = len(dataset_rows)
     log(f"[SUITE] stage=translation total={total} completed=0 remaining={total}")
@@ -215,6 +235,7 @@ def main() -> None:
             )
 
         sample_mappings = _deduplicate_and_sort_mappings(sample_mappings)
+        sample_mappings, generation_cardinality_applied = _enforce_generation_cardinality(sample_mappings, contract, expected_target=expected_target)
 
         sample_mappings = _enforce_cardinality(sample_mappings, contract, item_violations, expected_target=expected_target)
 
@@ -232,6 +253,20 @@ def main() -> None:
             "llm_output": llm_entry.get("raw", {}),
         }
         llm_trace.append(llm_trace_item)
+        execution = metadata.get("execution", {})
+        execution_trace.append(
+            {
+                "sample": sample_path.name,
+                "selected_strategy": execution.get("selected_strategy", metadata.get("selected_strategy", mode)),
+                "rules_ran": bool(execution.get("rules_ran", False)),
+                "retrieval_ran": bool(execution.get("retrieval_ran", False)),
+                "llm_ran": bool(execution.get("llm_ran", False)),
+                "candidate_snapping_ran": bool(execution.get("candidate_snapping_ran", False)),
+                "final_mapping_source": execution.get("final_mapping_source", "unknown"),
+                "generation_cardinality_applied": generation_cardinality_applied,
+                "candidate_count": len(result.evidence),
+            }
+        )
         for decision in metadata.get("decision_log", []):
             decision_trace.append(
                 {
@@ -251,6 +286,8 @@ def main() -> None:
                     {"path": item.payload.get("target_hint", ""), "score": item.score, "id": item.id}
                     for item in result.evidence
                 ],
+                "top_1_has_gold": bool(result.evidence and expected_target and result.evidence[0].payload.get("target_hint") == expected_target),
+                "top_5_has_gold": bool(expected_target and any(item.payload.get("target_hint") == expected_target for item in result.evidence[:5])),
             }
         )
 
@@ -346,7 +383,26 @@ def main() -> None:
     (predictions_dir / "sample_results.jsonl").write_text("\n".join(json.dumps(row) for row in sample_results) + ("\n" if sample_results else ""))
     (predictions_dir / "decision_trace.jsonl").write_text("\n".join(json.dumps(row) for row in decision_trace) + ("\n" if decision_trace else ""))
     (predictions_dir / "perf_trace.jsonl").write_text("\n".join(json.dumps(row) for row in perf_trace) + ("\n" if perf_trace else ""))
+    (predictions_dir / "execution_trace.jsonl").write_text("\n".join(json.dumps(row) for row in execution_trace) + ("\n" if execution_trace else ""))
     (predictions_dir / "errors_summary.json").write_text(json.dumps(errors_summary, indent=2))
+
+    if execution_trace:
+        changed_count = sum(1 for row in execution_trace if row.get("selected_strategy") != mode)
+        summary = {
+            "strategy_usage_counts": {},
+            "activation_counts": {
+                "rules_ran": sum(1 for row in execution_trace if row.get("rules_ran")),
+                "retrieval_ran": sum(1 for row in execution_trace if row.get("retrieval_ran")),
+                "llm_ran": sum(1 for row in execution_trace if row.get("llm_ran")),
+                "candidate_snapping_ran": sum(1 for row in execution_trace if row.get("candidate_snapping_ran")),
+            },
+            "average_candidate_count": sum(float(row.get("candidate_count", 0)) for row in execution_trace) / len(execution_trace),
+            "selected_strategy_changed_pct": changed_count / len(execution_trace),
+        }
+        for row in execution_trace:
+            strategy = str(row.get("selected_strategy", "unknown"))
+            summary["strategy_usage_counts"][strategy] = summary["strategy_usage_counts"].get(strategy, 0) + 1
+        (output_dir / "strategy_usage.json").write_text(json.dumps(summary, indent=2))
 
     suite_elapsed = time.perf_counter() - suite_start
     throughput = (total / suite_elapsed) if suite_elapsed > 0 else 0.0
