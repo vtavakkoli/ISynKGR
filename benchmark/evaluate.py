@@ -215,13 +215,13 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
             for row in _load_optional_jsonl(out_dir / "predictions" / "llm_trace.jsonl")
             if row.get("expected_target_path") and (row.get("predicted_top") or {}).get("target_path") not in {"", row.get("expected_target_path")}
         ],
-        "cardinality_issues": [r for r in invalid if any(v.get("type", "") == "cardinality_issue" for v in r.get("violations", []))],
+        "cardinality_issues": [r for r in invalid if any(str(v.get("type", "")).startswith("cardinality_") for v in r.get("violations", []))],
         "validation_reasons": {
             "schema_invalid": validation_reason_counts.get("schema_invalid", 0),
             "duplicate_mapping": validation_reason_counts.get("duplicate_mapping", 0),
             "confidence_low": validation_reason_counts.get("confidence_low", 0),
             "invalid_path": validation_reason_counts.get("invalid_path", 0),
-            "cardinality_issue": validation_reason_counts.get("cardinality_issue", 0),
+            "cardinality_issue": validation_reason_counts.get("cardinality_issue", 0) + validation_reason_counts.get("cardinality_trimmed", 0),
             "empty_target_for_non_no_match": validation_reason_counts.get("empty_target_for_non_no_match", 0),
             "wrong_transform": 0,
             "retrieval_failure": 0,

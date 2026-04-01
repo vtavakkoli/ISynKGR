@@ -83,7 +83,7 @@ def _enforce_cardinality(sample_mappings: list[dict], contract: dict, item_viola
     trimmed = sorted(sample_mappings, key=_rank, reverse=True)[:expected_count]
     item_violations.append(
         {
-            "type": "cardinality_issue",
+            "type": "cardinality_trimmed",
             "message": (
                 f"Trimmed mappings from {len(sample_mappings)} to {expected_count} "
                 f"for mode={contract['mode']}"
