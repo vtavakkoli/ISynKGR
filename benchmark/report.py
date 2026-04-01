@@ -54,7 +54,9 @@ def _bar_chart(path: Path, names: list[str], values: list[float], title: str, yl
 
 
 def _scenario_name(row: dict) -> str:
-    return str(row.get("baseline") or row.get("scenario") or "")
+    pair = str(row.get("pair") or "").strip()
+    scenario = str(row.get("baseline") or row.get("scenario") or "")
+    return f"{pair}::{scenario}" if pair else scenario
 
 
 def _metric(row: dict, key: str) -> float:
@@ -112,6 +114,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
     summary_rows = [
         {
             "scenario": r["scenario"],
+            "pair": r["scenario"].split("::", 1)[0] if "::" in r["scenario"] else "aggregate",
             "f1": _fmt(r["f1"]),
             "validity_pass_rate": _fmt(r["validity_pass_rate"]),
         }
@@ -173,7 +176,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "Canonical metric keys consumed from evaluator: `precision`, `recall`, `f1`, `validity_pass_rate`, `violation_counts`.",
         "",
         "## Main results",
-        _markdown_table(summary_rows, ["scenario", "f1", "validity_pass_rate"]),
+        _markdown_table(summary_rows, ["pair", "scenario", "f1", "validity_pass_rate"]),
         "",
         "## Ablation study",
         "Ablation scenarios are those with names prefixed by `ablation_`.",
@@ -271,25 +274,13 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 
 
 def generate_final_report(results_root: Path = Path("results")) -> Path:
-    scenarios = [
-        "baseline",
-        "full_framework",
-        "ablation_no_graphrag",
-        "ablation_no_parallel",
-        "ablation_no_community",
-        "ablation_no_reasoning",
-    ]
     rows = []
-    for scenario in scenarios:
-        metrics_path = results_root / scenario / "metrics.json"
-        if metrics_path.exists():
-            payload = json.loads(metrics_path.read_text())
-            if isinstance(payload, list):
-                for row in payload:
-                    if isinstance(row, dict):
-                        rows.append(row)
-            elif isinstance(payload, dict):
-                rows.append(payload)
+    for metrics_path in results_root.glob("**/metrics.json"):
+        payload = json.loads(metrics_path.read_text())
+        if isinstance(payload, list):
+            rows.extend([row for row in payload if isinstance(row, dict)])
+        elif isinstance(payload, dict):
+            rows.append(payload)
 
     final_dir = results_root / "final"
     write_report(final_dir, rows)

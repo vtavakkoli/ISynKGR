@@ -100,16 +100,16 @@ Both execute the same top-level workflow:
 ## Where outputs are saved
 
 Primary artifacts:
-- `artifacts/run_<timestamp>/dataset.jsonl`
-- `artifacts/run_<timestamp>/ground_truth.jsonl`
-- `artifacts/run_<timestamp>/predictions/<scenario>_seed<seed>/...`
+- `artifacts/run_<timestamp>/pairs/<SOURCE>__TO__<TARGET>/dataset.jsonl`
+- `artifacts/run_<timestamp>/pairs/<SOURCE>__TO__<TARGET>/ground_truth.jsonl`
+- `artifacts/run_<timestamp>/pairs/<SOURCE>__TO__<TARGET>/results/<scenario>/seed<seed>/...`
 - `artifacts/run_<timestamp>/metrics.json`
 - `artifacts/run_<timestamp>/tables/*.csv`
 - `artifacts/run_<timestamp>/plots/*.png`
 - `artifacts/run_<timestamp>/report.md`
 - `artifacts/run_<timestamp>/report.html`
 
-Compatibility symlink/copy is also exposed under `results/run_<timestamp>/`.
+Per-pair convenience outputs are also mirrored under `results/<SOURCE>__TO__<TARGET>/<scenario>/seed<seed>/`.
 
 ## Reproducibility notes
 

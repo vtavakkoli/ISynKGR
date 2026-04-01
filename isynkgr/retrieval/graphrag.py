@@ -1,46 +1,51 @@
 from __future__ import annotations
 
-import re
-
 from isynkgr.canonical.model import CanonicalModel
 from isynkgr.canonical.schemas import EvidenceItem
 from isynkgr.icr.entities import build_endpoint_path, normalize_path
 
 
-def _benchmark_aas_target(source_node_path: str) -> str:
-    match = re.search(r"i=(\d+)", source_node_path)
-    if not match:
-        return ""
-    idx = int(match.group(1)) - 1000
-    if idx < 0:
-        return ""
-    return f"aas://aas-{idx}/submodel/default/element/value"
+def _candidate_pool(target_schema_hint: str) -> list[str]:
+    hint = target_schema_hint.lower()
+    if hint == "aas":
+        return [
+            "aas://asset/submodel/default/element/temperature/value",
+            "aas://asset/submodel/default/element/pressure/value",
+            "aas://asset/submodel/default/element/flow/value",
+            "aas://asset/submodel/default/element/state/value",
+            "aas://asset/submodel/default/element/value",
+        ]
+    if hint == "iec61499":
+        return ["iec61499://device/res/fb/out_temp", "iec61499://device/res/fb/out_value"]
+    return [f"{hint}://candidate/default"]
 
 
 class GraphRAGRetriever:
     def retrieve(self, source: CanonicalModel, target_schema_hint: str) -> list[EvidenceItem]:
         scored: list[EvidenceItem] = []
+        pool = _candidate_pool(target_schema_hint)
         for n in source.nodes:
             node_path = normalize_path(n.id if "://" in n.id else build_endpoint_path(source.standard, n.id))
             lexical = (n.label or n.id or "").lower()
             score = 0.2
             if "temp" in lexical or "temperature" in lexical:
                 score += 0.5
-            if target_schema_hint.lower() in {"aas", "opcua"}:
-                target_hint = _benchmark_aas_target(node_path) if target_schema_hint.lower() == "aas" else ""
-                if not target_hint:
-                    target_hint = f"{target_schema_hint.lower()}://candidate/{(n.label or n.id).replace(' ', '_')}"
-                score += 0.2
-            else:
-                target_hint = ""
-            scored.append(
-                EvidenceItem(
-                    id=f"node:{node_path}",
-                    kind="node",
-                    text=f"{n.type}:{n.label or n.id}",
-                    score=min(score, 1.0),
-                    payload={"source_node": node_path, "target_hint": target_hint},
+            label = lexical.replace(" ", "_")
+            for idx, candidate in enumerate(pool):
+                boost = 0.0
+                if label and label in candidate.lower():
+                    boost += 0.4
+                if "value" in candidate.lower():
+                    boost += 0.05
+                cand_score = min(score + boost - (idx * 0.03), 1.0)
+                scored.append(
+                    EvidenceItem(
+                        id=f"node:{node_path}:cand:{idx}",
+                        kind="target_candidate",
+                        text=f"{n.type}:{n.label or n.id}",
+                        score=cand_score,
+                        payload={"source_node": node_path, "target_hint": candidate, "candidate_path": candidate},
+                    )
                 )
-            )
         scored.sort(key=lambda item: item.score, reverse=True)
         return scored[:20]

@@ -15,15 +15,16 @@ def test_full_workflow_fast_mode_generates_artifacts(monkeypatch):
         assert rc == 0
 
         root = Path("artifacts") / run_id
-        assert (root / "dataset.jsonl").read_text().strip()
-        assert (root / "ground_truth.jsonl").read_text().strip()
         assert (root / "metrics.json").read_text().strip()
+        assert (root / "pairs" / "OPCUA__TO__AAS" / "dataset.jsonl").read_text().strip()
+        assert (root / "pairs" / "AAS__TO__OPCUA" / "dataset.jsonl").read_text().strip()
         assert (root / "metrics" / "advanced_analysis.json").read_text().strip()
         assert (root / "report.md").read_text().strip()
         assert (root / "report.html").read_text().strip()
-        assert (root / "predictions" / "full_framework_seed11" / "mappings.jsonl").read_text().strip()
+        assert (root / "pairs" / "OPCUA__TO__AAS" / "results" / "full_framework" / "seed11" / "mappings.jsonl").read_text().strip()
+        assert (Path("results") / "OPCUA__TO__AAS" / "full_framework" / "seed11" / "metrics.json").read_text().strip()
     finally:
-        for p in [Path("artifacts") / run_id, Path("results") / run_id]:
+        for p in [Path("artifacts") / run_id, Path("results") / run_id, Path("results") / "OPCUA__TO__AAS", Path("results") / "AAS__TO__OPCUA"]:
             if p.is_symlink() or p.is_file():
                 p.unlink()
             elif p.exists():

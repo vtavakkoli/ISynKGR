@@ -11,8 +11,9 @@ from pathlib import Path
 from benchmark.evaluate import evaluate_run
 from benchmark.metrics import mean_std_ci
 from benchmark.report import write_report
-from isynkgr.icr.mapping_schema import ingest_mapping_payload
 from benchmark.validate_dataset import validate_or_generate
+from isynkgr.icr.mapping_schema import ingest_mapping_payload
+from isynkgr.pipeline.hybrid import ADAPTERS
 
 SEEDS = [11, 23, 37]
 
@@ -24,12 +25,10 @@ COMPONENT_FLAGS = {
     "embedding_similarity": {"rules": False, "llm": False, "adaptive_selection": False},
     "ablation_no_rules": {"rules": False},
     "ablation_no_retrieval": {"retrieval": False},
-    "ablation_no_graph_expansion": {"postprocess_snap": False},
     "ablation_no_llm": {"llm": False},
-    "ablation_no_reasoning_prompt": {"reasoning_prompt": False},
-    "ablation_no_community_filter": {"community_filter": False},
-    "ablation_no_parallel_retrieval": {"parallel_retrieval": False},
 }
+
+VALID_SCENARIOS = set(COMPONENT_FLAGS)
 
 
 def _now_run_id(prefix: str) -> str:
@@ -53,56 +52,84 @@ def _artifact_paths(run_id: str) -> tuple[Path, Path]:
     return artifacts_dir, compat_dir
 
 
-def _copy_gt_and_dataset(artifacts_dir: Path) -> None:
+def _pair_key(source: str, target: str) -> str:
+    return f"{source.upper()}__TO__{target.upper()}"
+
+
+def _pair_supported(source: str, target: str) -> tuple[bool, str]:
+    src = source.lower()
+    tgt = target.lower()
+    if src not in ADAPTERS:
+        return False, f"source adapter '{source}' not available"
+    if tgt not in ADAPTERS:
+        return False, f"target adapter '{target}' not available"
+    return True, ""
+
+
+def _source_fixture_path(source_standard: str, idx: int, source_dir: Path) -> Path:
+    src = source_standard.upper()
+    if src == "OPCUA":
+        return Path("datasets/v1/opcua/synthetic") / f"opcua_{idx % 100:03d}.xml"
+    if src == "AAS":
+        return Path("datasets/v1/aas/synthetic") / f"aas_{idx % 100:03d}.json"
+    source_file = source_dir / f"sample_{idx:04d}_{src.lower()}.json"
+    payload = {
+        "standard": src,
+        "classes": [{"id": f"tag_{idx}", "label": "Temperature"}],
+        "relations": [{"source": f"tag_{idx}", "target": f"tag_{idx}_value", "type": "hasValue"}],
+        "teds": [{"id": f"teds_{idx}", "name": "SensorTEDS", "channels": [{"id": "ch0", "dtype": "FLOAT", "unit": "C"}]}],
+        "devices": [{"id": f"dev_{idx}", "resources": [{"id": "res1"}]}],
+    }
+    source_file.write_text(json.dumps(payload))
+    return source_file
+
+
+def _synthetic_id_for_standard(standard: str, idx: int, default: str) -> str:
+    s = standard.upper()
+    if s == "OPCUA":
+        return f"opcua://ns=2;i={1000 + idx}"
+    if s == "AAS":
+        return f"aas://asset/submodel/default/element/value_{idx}"
+    if s == "IEEE1451":
+        return f"ieee1451://teds{idx}/ch{idx % 4}/value"
+    if s == "IEC61499":
+        return f"iec61499://Device{idx}/Res1/FB1/OUT_VALUE"
+    if s == "ISO15926":
+        return f"iso15926://class/{idx}"
+    return default
+
+
+def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standard: str, max_rows: int) -> Path:
+    pair_dir = artifacts_dir / "pairs" / _pair_key(source_standard, target_standard)
+    pair_dir.mkdir(parents=True, exist_ok=True)
+    source_dir = pair_dir / "sources"
+    source_dir.mkdir(parents=True, exist_ok=True)
+
     gt_src = Path("datasets/v1/crosswalk/gt_mappings.jsonl")
-    gt_dst = artifacts_dir / "ground_truth.jsonl"
-    rows = []
-    gt_rows = []
+    rows: list[dict] = []
+    gt_rows: list[dict] = []
     tiers = ["synthetic", "noisy", "realistic"]
     difficulties = ["easy", "medium", "hard"]
-    pair_cycle = [("OPCUA", "AAS"), ("IEEE1451", "IEC61499"), ("ISO15926", "AAS")]
-    source_dir = artifacts_dir / "sources"
-    source_dir.mkdir(parents=True, exist_ok=True)
-    max_rows = int(os.getenv("MAX_ITEMS", "180"))
+
     for i, line in enumerate(gt_src.read_text().splitlines()):
+        if i >= max_rows:
+            break
         if not line.strip():
             continue
         rec = ingest_mapping_payload(json.loads(line), migrate_legacy=True).model_dump()
-        source_standard, target_standard = pair_cycle[i % len(pair_cycle)]
-        source_file = source_dir / f"sample_{i:04d}_{source_standard.lower()}.json"
-        if source_standard == "OPCUA":
-            source_file = Path("datasets/v1/opcua/synthetic") / f"opcua_{i % 100:03d}.xml"
-        else:
-            payload = {
-                "standard": source_standard,
-                "classes": [{"id": f"tag_{i}", "label": "Temperature"}],
-                "relations": [{"source": f"tag_{i}", "target": f"tag_{i}_value", "type": "hasValue"}],
-                "teds": [{"id": f"teds_{i}", "name": "SensorTEDS", "channels": [{"id": "ch0", "dtype": "FLOAT", "unit": "C", "range": {"min": -50, "max": 250}}]}],
-                "devices": [{"id": f"dev_{i}", "resources": [{"id": "res1", "function_blocks": [{"id": "fb1", "type": "SIFB", "inputs": [], "outputs": [{"id": "OUT_TEMP", "dtype": "FLOAT", "unit": "C", "range": {"min": -50, "max": 250}}]}]}]}],
-            }
-            source_file.write_text(json.dumps(payload))
-        if i >= max_rows:
-            break
-        if source_standard == "OPCUA":
-            source_id = rec["source_path"]
-        elif source_standard == "IEEE1451":
-            source_id = f"ieee1451://teds{i}/ch{i % 4}/temp"
-        elif source_standard == "ISO15926":
-            source_id = f"iso15926://class{i}"
-        else:
-            source_id = f"{source_standard.lower()}://device{i}/res1/fb1/var{i % 3}"
-
-        if target_standard == "AAS":
-            target_id = rec["target_path"]
-        elif target_standard == "IEC61499":
-            target_id = f"iec61499://Device{i}/Res1/FB1/OUT_TEMP"
-        else:
-            target_id = f"{target_standard.lower()}://ns=2;s=bench{i}"
+        source_id = _synthetic_id_for_standard(source_standard, i, rec["source_path"])
+        target_id = _synthetic_id_for_standard(target_standard, i, rec["target_path"])
         is_no_match = i % 11 == 0
         if is_no_match:
             target_id = ""
-        normalized = rec | {"source_path": source_id, "target_path": target_id, "mapping_type": "no_match" if is_no_match else rec.get("mapping_type", "equivalent")}
-        gt_rows.append(normalized)
+        gt_rows.append(
+            rec
+            | {
+                "source_path": source_id,
+                "target_path": target_id,
+                "mapping_type": "no_match" if is_no_match else rec.get("mapping_type", "equivalent"),
+            }
+        )
         rows.append(
             {
                 "id": source_id,
@@ -113,40 +140,37 @@ def _copy_gt_and_dataset(artifacts_dir: Path) -> None:
                 "pair": f"{source_standard}->{target_standard}",
                 "tier": tiers[i % len(tiers)],
                 "difficulty": difficulties[i % len(difficulties)],
-                "transform_requirement": "unit_convert" if i % 4 == 0 else ("structural_change" if i % 6 == 0 else "none"),
-                "has_hard_negative": i % 7 == 0,
-                "is_no_match": is_no_match,
-                "is_paraphrase": i % 5 == 0,
-                "has_noisy_label": i % 3 == 0,
-                "has_alias_synonym": i % 4 == 0,
-                "has_distractor_candidates": i % 7 == 0,
-                "has_partial_match": i % 6 == 0,
-                "cardinality_mode": "one_to_many" if i % 13 == 0 else ("many_to_one" if i % 17 == 0 else "one_to_one"),
-                "source_path": str(source_file),
+                "source_path": str(_source_fixture_path(source_standard, i, source_dir)),
+                "cardinality_contract": {"mode": "one_to_one", "grouped_1": False, "expected_count": 1},
             }
         )
-    gt_dst.write_text("\n".join(json.dumps(r) for r in gt_rows) + "\n")
-    (artifacts_dir / "dataset.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    (pair_dir / "dataset.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    (pair_dir / "ground_truth.jsonl").write_text("\n".join(json.dumps(r) for r in gt_rows) + "\n")
+    return pair_dir
 
 
-def _run_variant(variant_name: str, artifacts_dir: Path, cfg_path: Path, logs_dir: Path, seed: int) -> tuple[dict, float]:
-    out_dir = artifacts_dir / "predictions" / f"{variant_name}_seed{seed}"
+def _run_variant(variant_name: str, pair_dir: Path, cfg_path: Path, logs_dir: Path, seed: int, source_standard: str, target_standard: str) -> tuple[dict, float]:
+    out_dir = pair_dir / "results" / variant_name / f"seed{seed}"
     out_dir.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.update(
         {
-            "DATASET_DIR": str(artifacts_dir.resolve()),
+            "DATASET_DIR": str(pair_dir.resolve()),
             "OUTPUT_DIR": str(out_dir.resolve()),
             "CONFIG_PATH": str(cfg_path.resolve()),
             "SUT_MODE": "embedding_only" if variant_name == "embedding_similarity" else ("hybrid" if variant_name == "full_framework" or variant_name.startswith("ablation_") else variant_name),
             "SEED": str(seed),
             "MAX_ITEMS": str(int(os.getenv("MAX_ITEMS", "100"))),
             "COMPONENT_FLAGS": json.dumps(COMPONENT_FLAGS.get(variant_name, {})),
+            "SOURCE_PROTOCOL": source_standard.lower(),
+            "TARGET_PROTOCOL": target_standard.lower(),
+            "ALLOW_SYNTHETIC_SHORTCUTS": "0",
         }
     )
 
     start = time.perf_counter()
-    log_path = logs_dir / f"{variant_name}_seed{seed}.log"
+    log_path = logs_dir / f"{_pair_key(source_standard, target_standard)}_{variant_name}_seed{seed}.log"
     with log_path.open("w") as fp:
         proc = subprocess.Popen(["python", "-u", "-m", "benchmark.run_sut"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         assert proc.stdout is not None
@@ -156,30 +180,34 @@ def _run_variant(variant_name: str, artifacts_dir: Path, cfg_path: Path, logs_di
         proc.wait()
     elapsed = time.perf_counter() - start
     if proc.returncode != 0:
-        raise RuntimeError(f"variant {variant_name} seed {seed} failed")
+        raise RuntimeError(f"variant {variant_name} seed {seed} failed for {_pair_key(source_standard, target_standard)}")
 
     metrics = evaluate_run(out_dir)
+    (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
     metrics["baseline"] = variant_name
     metrics["seed"] = seed
+    metrics["pair"] = f"{source_standard}->{target_standard}"
     metrics["time_s"] = elapsed
+
+    results_link = Path("results") / _pair_key(source_standard, target_standard) / variant_name / f"seed{seed}"
+    results_link.mkdir(parents=True, exist_ok=True)
+    for f in ["metrics.json", "error_analysis.json", "error_summary.json", "retrieval_diagnostics.json", "strategy_usage.json"]:
+        src = out_dir / f
+        if src.exists():
+            (results_link / f).write_text(src.read_text())
     return metrics, elapsed
 
 
 def _measure_robustness(rows: list[dict]) -> dict:
-    by_variant: dict[str, list[dict]] = {}
+    by_variant_pair: dict[str, list[dict]] = {}
     for row in rows:
-        by_variant.setdefault(row["baseline"], []).append(row)
+        key = f"{row['pair']}::{row['baseline']}"
+        by_variant_pair.setdefault(key, []).append(row)
     out: dict[str, dict] = {}
-    for variant, runs in by_variant.items():
+    for key, runs in by_variant_pair.items():
         f1s = [float(r.get("f1", 0.0)) for r in runs]
         rec1 = [float(r.get("retrieval_recall_at_1", 0.0)) for r in runs]
-        out[variant] = {
-            "determinism": mean_std_ci(f1s),
-            "prompt_sensitivity": max(f1s) - min(f1s) if f1s else 0.0,
-            "noise_robustness": sum(float(r.get("per_tier", {}).get("noisy", {}).get("accuracy", 0.0)) for r in runs) / len(runs),
-            "paraphrase_robustness": sum(float(r.get("per_tier", {}).get("realistic", {}).get("accuracy", 0.0)) for r in runs) / len(runs),
-            "retrieval_quality": mean_std_ci(rec1),
-        }
+        out[key] = {"determinism": mean_std_ci(f1s), "prompt_sensitivity": max(f1s) - min(f1s) if f1s else 0.0, "retrieval_quality": mean_std_ci(rec1)}
     return out
 
 
@@ -188,27 +216,24 @@ def _write_error_tables(artifacts_dir: Path, rows: list[dict]) -> None:
     table_dir.mkdir(exist_ok=True)
     csv_path = table_dir / "error_summary.csv"
     with csv_path.open("w", newline="") as fp:
-        writer = csv.DictWriter(fp, fieldnames=["variant", "seed", "fp", "fn", "schema_invalid", "duplicate_mapping", "confidence_low", "invalid_path", "cardinality_issue", "wrong_transform", "retrieval_failure", "llm_hallucination", "empty_target_for_non_no_match"])
+        writer = csv.DictWriter(fp, fieldnames=["pair", "variant", "seed", "fp", "fn", "schema_invalid", "cardinality_issue", "retrieval_failure", "llm_hallucination"])
         writer.writeheader()
         for row in rows:
-            pred_dir = artifacts_dir / "predictions" / f"{row['baseline']}_seed{row['seed']}"
+            source, target = row["pair"].split("->", 1)
+            pred_dir = artifacts_dir / "pairs" / _pair_key(source, target) / "results" / row["baseline"] / f"seed{row['seed']}"
             analysis = json.loads((pred_dir / "error_analysis.json").read_text())
             reasons = analysis.get("validation_reasons", {})
             writer.writerow(
                 {
+                    "pair": row["pair"],
                     "variant": row["baseline"],
                     "seed": row["seed"],
                     "fp": len(analysis.get("false_positives", [])),
                     "fn": len(analysis.get("false_negatives", [])),
                     "schema_invalid": reasons.get("schema_invalid", 0),
-                    "duplicate_mapping": reasons.get("duplicate_mapping", 0),
-                    "confidence_low": reasons.get("confidence_low", 0),
-                    "invalid_path": reasons.get("invalid_path", 0),
                     "cardinality_issue": reasons.get("cardinality_issue", 0),
-                    "wrong_transform": len(analysis.get("wrong_transform", [])),
                     "retrieval_failure": len(analysis.get("retrieval_failures", [])),
                     "llm_hallucination": len(analysis.get("llm_hallucinations", [])),
-                    "empty_target_for_non_no_match": reasons.get("empty_target_for_non_no_match", 0),
                 }
             )
 
@@ -221,19 +246,38 @@ def run_full_workflow() -> int:
     logs_dir.mkdir(exist_ok=True)
     try:
         validate_or_generate(Path("datasets/v1"))
-        _copy_gt_and_dataset(artifacts_dir)
-        variants = [v["name"] for v in cfg["variants"]]
-
+        pairs = [tuple(pair) for pair in cfg.get("pairs", [])]
+        variants = [v["name"] for v in cfg["variants"] if v["name"] in VALID_SCENARIOS]
+        max_rows = int(os.getenv("MAX_ITEMS", str(cfg.get("items_per_standard", 120))))
+        skipped_pairs: list[dict[str, str]] = []
         rows: list[dict] = []
-        for variant in variants:
-            for seed in SEEDS:
-                metrics, _ = _run_variant(variant, artifacts_dir, Path("benchmark/config.json"), logs_dir, seed)
-                rows.append(metrics)
+
+        for source_standard, target_standard in pairs:
+            supported, reason = _pair_supported(source_standard, target_standard)
+            if not supported:
+                skipped_pairs.append({"pair": f"{source_standard}->{target_standard}", "reason": reason})
+                print(f"[SKIP] {source_standard}->{target_standard}: {reason}", flush=True)
+                continue
+            pair_dir = _build_pair_dataset(artifacts_dir, source_standard, target_standard, max_rows)
+            for variant in variants:
+                for seed in SEEDS:
+                    metrics, _ = _run_variant(variant, pair_dir, Path("benchmark/config.json"), logs_dir, seed, source_standard, target_standard)
+                    rows.append(metrics)
 
         (artifacts_dir / "metrics.json").write_text(json.dumps(rows, indent=2))
-        (artifacts_dir / "metrics" ).mkdir(exist_ok=True)
+        (artifacts_dir / "skipped_pairs.json").write_text(json.dumps(skipped_pairs, indent=2))
+        (artifacts_dir / "metrics").mkdir(exist_ok=True)
         robustness = _measure_robustness(rows)
-        (artifacts_dir / "metrics" / "advanced_analysis.json").write_text(json.dumps({"robustness": robustness, "limitations": ["Current execution supports OPCUA->AAS pair only."], "runtime_dependencies": {"model": os.getenv("MODEL_NAME", "qwen3.5:0.8b")}}, indent=2))
+        (artifacts_dir / "metrics" / "advanced_analysis.json").write_text(
+            json.dumps(
+                {
+                    "robustness": robustness,
+                    "limitations": ["Unsupported pairs are skipped and recorded in skipped_pairs.json."],
+                    "runtime_dependencies": {"model": os.getenv("MODEL_NAME", "qwen3.5:0.8b")},
+                },
+                indent=2,
+            )
+        )
         _write_error_tables(artifacts_dir, rows)
         write_report(artifacts_dir, rows)
 
@@ -242,7 +286,6 @@ def run_full_workflow() -> int:
                 target = compat_dir / p.name
                 if p.is_file() and not target.exists():
                     target.write_text(p.read_text())
-
         print(f"RUN_ID={run_id}")
         return 0
     except Exception as exc:
