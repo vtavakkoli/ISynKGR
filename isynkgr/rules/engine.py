@@ -17,12 +17,13 @@ class RuleEngine:
         source: CanonicalModel,
         target_protocol: str,
         target: CanonicalModel | None = None,
+        allow_synthetic_shortcuts: bool = True,
     ) -> list[Mapping]:
         mappings: list[Mapping] = []
         target_nodes = {n.label: n for n in (target.nodes if target else []) if n.label}
 
         for node in source.nodes:
-            benchmark_target = self._deterministic_benchmark_target(node.id, target_protocol)
+            benchmark_target = self._deterministic_benchmark_target(node.id, target_protocol) if allow_synthetic_shortcuts else ""
             if benchmark_target:
                 payload = {
                     "source_path": node.id,

@@ -172,6 +172,26 @@ def _snap_mapping_to_candidates(mapping: Mapping, candidates: list[str], source_
     )
 
 
+def _constrain_mapping_to_candidates(mapping: Mapping, candidates: list[str], source_standard: str, target_standard: str) -> Mapping:
+    if not candidates or mapping.mapping_type.value == "no_match":
+        return mapping
+    if mapping.target_path in candidates:
+        return mapping
+    return normalize_mapping_item(
+        {
+            "source_path": mapping.source_path,
+            "target_path": "",
+            "mapping_type": "no_match",
+            "transform": None,
+            "confidence": min(mapping.confidence, 0.3),
+            "rationale": f"{mapping.rationale} Rejected because target was outside retrieved candidate set.",
+            "evidence": [*mapping.evidence, "constraint:candidate_set"],
+        },
+        source_standard,
+        target_standard,
+    )
+
+
 @dataclass
 class HybridPipeline:
     llm: OllamaClient
@@ -196,6 +216,8 @@ class HybridPipeline:
             "reasoning_prompt": True,
             "community_filter": True,
             "parallel_retrieval": True,
+            "allow_synthetic_benchmark_shortcuts": True,
+            "constrain_llm_to_candidates": True,
         }
         flags.update(config.component_flags or {})
         src = ADAPTERS[source_standard]
@@ -257,8 +279,14 @@ class HybridPipeline:
             (mode == "rule_only" and flags["rules"])
             or (mode == "hybrid" and flags["rules"] and (not flags["adaptive_selection"] or selected_strategy == "rules"))
         )
+        rules_ran = False
         if run_rules:
-            rule_mappings = self.rules.apply_rules(source_model, target_standard)
+            rules_ran = True
+            rule_mappings = self.rules.apply_rules(
+                source_model,
+                target_standard,
+                allow_synthetic_shortcuts=bool(flags.get("allow_synthetic_benchmark_shortcuts", True)),
+            )
             rule_report = normalize_mapping_items([m.model_dump() for m in rule_mappings], source_standard, target_standard, method="rule")
             mappings.extend(rule_report.accepted)
             component_outputs["rule_engine"] = [m.model_dump() for m in rule_report.accepted]
@@ -280,6 +308,7 @@ class HybridPipeline:
             or (mode == "hybrid" and flags["llm"] and (not flags["adaptive_selection"] or selected_strategy == "llm"))
         )
         llm_mappings: list[Mapping] = []
+        snapped_to_candidate = False
         if run_llm:
             prompt = build_mapping_prompt(
                 source_protocol=source_standard,
@@ -304,9 +333,15 @@ class HybridPipeline:
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
             candidates = _candidate_paths(evidence, target_standard)
             if flags["postprocess_snap"]:
-                llm_mappings = [_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted]
+                snapped = [_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted]
+                snapped_to_candidate = any(m.target_path != n.target_path for m, n in zip(llm_report.accepted, snapped))
+                llm_candidates = snapped
             else:
-                llm_mappings = llm_report.accepted
+                llm_candidates = llm_report.accepted
+            if flags.get("constrain_llm_to_candidates", True):
+                llm_mappings = [_constrain_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_candidates]
+            else:
+                llm_mappings = llm_candidates
             mappings.extend(llm_mappings)
             component_outputs["llm"] = [m.model_dump() for m in llm_mappings]
             rejected.extend([item.model_dump() for item in llm_report.rejected])
@@ -360,6 +395,14 @@ class HybridPipeline:
             "component_outputs": component_outputs,
             "selected_strategy": selected_strategy if mode == "hybrid" else mode,
             "signals": {"retrieval_top_score": retrieval_top_score, "schema_match_signal": schema_match_signal},
+            "execution": {
+                "selected_strategy": selected_strategy if mode == "hybrid" else mode,
+                "rules_ran": rules_ran,
+                "retrieval_ran": bool(flags["retrieval"] and mode in {"hybrid", "rag_only", "graph_only"}),
+                "llm_ran": run_llm,
+                "candidate_snapping_ran": snapped_to_candidate,
+                "final_mapping_source": "llm" if run_llm and llm_mappings else ("rules" if rules_ran else ("retrieval" if selected_strategy == "retrieval" else "fallback")),
+            },
         }
         if llm_error is not None:
             metadata["llm_error"] = llm_error

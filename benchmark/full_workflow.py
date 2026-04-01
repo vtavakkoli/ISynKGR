@@ -159,6 +159,7 @@ def _run_variant(variant_name: str, artifacts_dir: Path, cfg_path: Path, logs_di
         raise RuntimeError(f"variant {variant_name} seed {seed} failed")
 
     metrics = evaluate_run(out_dir)
+    (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
     metrics["baseline"] = variant_name
     metrics["seed"] = seed
     metrics["time_s"] = elapsed
