@@ -2,7 +2,14 @@
   "seed": 42,
   "run_id_prefix": "run",
   "standards": ["OPCUA", "AAS", "IEEE1451", "IEC61499", "ISO15926"],
-  "pairs": [["OPCUA", "AAS"], ["IEEE1451", "IEC61499"], ["ISO15926", "AAS"]],
+  "pairs": [
+    ["OPCUA", "AAS"],
+    ["AAS", "OPCUA"],
+    ["IEEE1451", "IEC61499"],
+    ["IEC61499", "IEEE1451"],
+    ["OPCUA", "IEEE1451"],
+    ["ISO15926", "AAS"]
+  ],
   "items_per_standard": 180,
   "tiers": ["synthetic", "noisy", "realistic"],
   "variants": [
@@ -13,10 +20,6 @@
     {"name": "embedding_similarity"},
     {"name": "ablation_no_rules"},
     {"name": "ablation_no_retrieval"},
-    {"name": "ablation_no_graph_expansion"},
-    {"name": "ablation_no_llm"},
-    {"name": "ablation_no_reasoning_prompt"},
-    {"name": "ablation_no_community_filter"},
-    {"name": "ablation_no_parallel_retrieval"}
+    {"name": "ablation_no_llm"}
   ]
 }

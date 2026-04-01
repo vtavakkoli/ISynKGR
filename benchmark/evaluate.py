@@ -50,7 +50,12 @@ def _deduplicate_rows(rows: list[dict]) -> list[dict]:
 
 
 def _resolve_gt_path(out_dir: Path) -> Path:
-    for path in [out_dir.parent / "ground_truth.jsonl", out_dir.parent / "gt_mappings.jsonl", out_dir.parent.parent / "ground_truth.jsonl"]:
+    for path in [
+        out_dir.parent / "ground_truth.jsonl",
+        out_dir.parent / "gt_mappings.jsonl",
+        out_dir.parent.parent / "ground_truth.jsonl",
+        out_dir.parent.parent.parent / "ground_truth.jsonl",
+    ]:
         if path.exists():
             return path
     raise FileNotFoundError("Ground truth not found.")
