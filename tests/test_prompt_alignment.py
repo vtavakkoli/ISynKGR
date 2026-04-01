@@ -72,7 +72,7 @@ def test_prompt_prefers_exact_target_candidates() -> None:
     assert "Do not invent a new target_path" in prompt
 
 
-def test_prompt_filters_non_benchmark_aas_candidates() -> None:
+def test_prompt_keeps_non_benchmark_aas_candidates() -> None:
     source = CanonicalModel(standard="opcua", nodes=[CanonicalNode(id="opcua://ns=2;i=1000", type="signal", label="Pump0")], edges=[])
     evidence = [
         EvidenceItem(
@@ -99,7 +99,7 @@ def test_prompt_filters_non_benchmark_aas_candidates() -> None:
         evidence=evidence,
     )
     assert "aas://aas-0/submodel/default/element/value" in prompt
-    assert "aas://candidate/Pump0" not in prompt
+    assert "aas://candidate/Pump0" in prompt
 
 
 def test_invented_paths_snap_to_exact_candidate(monkeypatch) -> None:

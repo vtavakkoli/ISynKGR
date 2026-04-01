@@ -42,10 +42,6 @@ def _target_summary(evidence: list[EvidenceItem], target_protocol: str, max_item
             continue
         seen.add(path)
         fallback.append({"path": path, "name": item.text, "description": item.kind, "exact_candidate": False})
-    if target_protocol.lower() == "aas":
-        benchmark_exact = [row for row in exact if row["path"].startswith("aas://aas-") and row["path"].endswith("/submodel/default/element/value")]
-        if benchmark_exact:
-            exact = benchmark_exact
     rows = exact if exact else fallback
     return rows[:max_items]
 
@@ -57,6 +53,7 @@ def build_mapping_prompt(
     target_schema_summary: dict[str, Any],
     source_model: CanonicalModel,
     evidence: list[EvidenceItem],
+    use_reasoning_prompt: bool = True,
 ) -> str:
     contract = {
         "mappings": [
@@ -79,7 +76,7 @@ def build_mapping_prompt(
         "SOURCE_VARIABLES": _node_summary(source_model),
         "TARGET_VARIABLES": _target_summary(evidence, target_protocol),
     }
-    return (
+    base_prompt = (
         "You are an industrial protocol mapping assistant.\n"
         "Return JSON only and no markdown, comments, XML tags, or prose.\n"
         "Do not output hidden reasoning or thinking. Put only concise rationale/evidence text in final JSON.\n"
@@ -97,4 +94,10 @@ def build_mapping_prompt(
         "8) Prefer one high-confidence mapping per source variable when possible.\n"
         "Input context:\n"
         f"{json.dumps(payload, ensure_ascii=False)}"
+    )
+    if not use_reasoning_prompt:
+        return base_prompt
+    return (
+        f"{base_prompt}\n"
+        "Before finalizing, do a short internal consistency check over source_path prefixes, target_path prefixes, and mapping_type/transform validity."
     )

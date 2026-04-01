@@ -108,3 +108,31 @@ def test_evaluate_run_treats_label_match_as_equivalent(tmp_path):
     metrics = evaluate_run(out_dir)
     assert metrics["matched_count"] == 1
     assert metrics["f1"] == 1.0
+
+
+def test_evaluate_exports_difficulty_and_error_summary(tmp_path):
+    out_dir = tmp_path / "predictions"
+    pred_dir = out_dir / "predictions"
+    pred_dir.mkdir(parents=True)
+    pred_rows = [
+        {
+            "source_path": "opcua://ns=2;i=1000",
+            "target_path": "",
+            "mapping_type": "no_match",
+            "confidence": 0.2,
+            "rationale": "no match generated",
+            "evidence": [],
+        }
+    ]
+    gt_rows = pred_rows
+    _write_jsonl(out_dir / "mappings.jsonl", pred_rows)
+    _write_jsonl(tmp_path / "ground_truth.jsonl", gt_rows)
+    (out_dir / "validation.json").write_text(json.dumps([{"valid": False, "violations": [{"type": "schema_invalid"}]}]))
+    _write_jsonl(pred_dir / "sample_results.jsonl", [{"sample": "s1", "tier": "noisy", "pair": "OPCUA->AAS", "difficulty": "hard", "matched": True}])
+    _write_jsonl(pred_dir / "decision_trace.jsonl", [{"selected_strategy": "llm", "pair": "OPCUA->AAS", "tier": "noisy", "difficulty": "hard", "matched": True}])
+
+    metrics = evaluate_run(out_dir)
+    assert metrics["per_difficulty"]["hard"]["count"] == 1
+    assert metrics["adaptive_strategy_usage"]["llm"] == 1
+    summary = json.loads((out_dir / "error_summary.json").read_text())
+    assert "schema_invalid" in summary

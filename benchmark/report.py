@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import csv
 from pathlib import Path
 
 CANONICAL_METRIC_KEYS = ("precision", "recall", "f1", "validity_pass_rate", "violation_counts")
@@ -125,25 +126,75 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "scenarios": canonical_rows,
     }
     (run_dir / "report.json").write_text(json.dumps(report_payload, indent=2))
+    metrics_dir = run_dir / "tables"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    with (metrics_dir / "main_comparison.csv").open("w", newline="") as fp:
+        writer = csv.DictWriter(
+            fp,
+            fieldnames=[
+                "scenario",
+                "precision",
+                "recall",
+                "f1",
+                "validity_pass_rate",
+                "transform_correctness",
+                "retrieval_recall_at_1",
+                "retrieval_recall_at_5",
+                "latency_per_sample_s",
+                "runtime_per_scenario_s",
+            ],
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "scenario": _scenario_name(row),
+                    "precision": row.get("precision", 0.0),
+                    "recall": row.get("recall", 0.0),
+                    "f1": row.get("f1", 0.0),
+                    "validity_pass_rate": row.get("validity_pass_rate", 0.0),
+                    "transform_correctness": row.get("transform_correctness", 0.0),
+                    "retrieval_recall_at_1": row.get("retrieval_recall_at_1", 0.0),
+                    "retrieval_recall_at_5": row.get("retrieval_recall_at_5", 0.0),
+                    "latency_per_sample_s": row.get("latency_per_sample_s", 0.0),
+                    "runtime_per_scenario_s": row.get("runtime_per_scenario_s", 0.0),
+                }
+            )
 
     md = [
         "# ISynKGR Benchmark Report",
         "",
+        "## Benchmark setup",
+        "This report is generated from per-scenario exported metrics across configured seeds.",
+        "",
+        "## Scenario definitions",
+        "See `docs/SCENARIO_MATRIX.md` for component-level scenario toggles.",
+        "",
         "Canonical metric keys consumed from evaluator: `precision`, `recall`, `f1`, `validity_pass_rate`, `violation_counts`.",
         "",
-        "## Summary table (F1 + validity)",
+        "## Main results",
         _markdown_table(summary_rows, ["scenario", "f1", "validity_pass_rate"]),
+        "",
+        "## Ablation study",
+        "Ablation scenarios are those with names prefixed by `ablation_`.",
         "",
         "## Why validity is low",
         _markdown_table(validity_breakdown, ["reason", "count"]),
         "",
+        "## Error analysis",
         "## Top violations",
         _markdown_table(violation_rows or [{"violation_type": "none", "count": 0}], ["violation_type", "count"]),
+        "",
+        "## Reproducibility notes",
+        "- Seeds are fixed per run; metrics are exported from artifacts without manual post-editing.",
+        "- See `docs/IMPLEMENTATION_DIAGNOSIS.md` for known limitations.",
         "",
         "## Plots",
         "- `plots/f1_by_scenario.png`",
         "- `plots/validity_by_scenario.png`",
         "- `plots/top_violations.png`",
+        "- `plots/latency_by_scenario.png`",
+        "- `plots/retrieval_recall_by_scenario.png`",
         "",
         "## Raw JSON details",
         "```json",
@@ -176,6 +227,20 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "Runtime Cost by Scenario",
         "runtime_s",
     )
+    _bar_chart(
+        plots_dir / "latency_by_scenario.png",
+        [r["scenario"] for r in ranked_f1],
+        [float(next((x.get("latency_per_sample_s", 0.0) for x in rows if _scenario_name(x) == r["scenario"]), 0.0)) for r in ranked_f1],
+        "Latency per Sample by Scenario",
+        "seconds",
+    )
+    _bar_chart(
+        plots_dir / "retrieval_recall_by_scenario.png",
+        [r["scenario"] for r in ranked_f1],
+        [float(next((x.get("retrieval_recall_at_5", 0.0) for x in rows if _scenario_name(x) == r["scenario"]), 0.0)) for r in ranked_f1],
+        "Retrieval Recall@5 by Scenario",
+        "recall@5",
+    )
 
     summary_table = html.escape(_markdown_table(summary_rows, ["scenario", "f1", "validity_pass_rate"]))
     validity_table = html.escape(_markdown_table(validity_breakdown, ["reason", "count"]))
@@ -193,6 +258,8 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 <li><img alt="Validity by scenario" src="plots/validity_by_scenario.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Top violations" src="plots/top_violations.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Cost vs performance" src="plots/cost_vs_performance.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="Latency by scenario" src="plots/latency_by_scenario.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="Retrieval recall by scenario" src="plots/retrieval_recall_by_scenario.png" style="max-width:100%;height:auto" /></li>
 </ul>
 <h2>Raw JSON details</h2>
 <details>

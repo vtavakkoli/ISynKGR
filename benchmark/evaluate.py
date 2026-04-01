@@ -122,6 +122,7 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
         "per_mapping_type": per_type,
         "per_tier": {},
         "per_pair": {},
+        "per_difficulty": {},
         "confidence_calibration_error": calibration_error,
         "validity_pass_rate": sum(1 for r in reports if r.get("valid")) / len(reports) if reports else 0.0,
         "violation_counts": violation_counts(reports),
@@ -149,12 +150,37 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
             pair_rows.setdefault(row.get("pair", "unknown"), []).append(row)
         score["per_tier"] = {k: {"count": len(v), "accuracy": sum(1 for x in v if x.get("matched")) / len(v)} for k, v in tier_rows.items()}
         score["per_pair"] = {k: {"count": len(v), "accuracy": sum(1 for x in v if x.get("matched")) / len(v)} for k, v in pair_rows.items()}
+        difficulty_rows: dict[str, list[dict]] = {}
+        for row in sample_rows:
+            difficulty_rows.setdefault(row.get("difficulty", "unknown"), []).append(row)
+        score["per_difficulty"] = {k: {"count": len(v), "accuracy": sum(1 for x in v if x.get("matched")) / len(v)} for k, v in difficulty_rows.items()}
     if decision_rows:
         usage: dict[str, int] = {}
+        by_pair: dict[str, dict[str, int]] = {}
+        by_tier: dict[str, dict[str, int]] = {}
+        by_difficulty: dict[str, dict[str, int]] = {}
+        strategy_accuracy: dict[str, list[bool]] = {}
         for row in decision_rows:
             strategy = str(row.get("selected_strategy", "unknown"))
             usage[strategy] = usage.get(strategy, 0) + 1
+            pair = str(row.get("pair", "unknown"))
+            tier = str(row.get("tier", "unknown"))
+            difficulty = str(row.get("difficulty", "unknown"))
+            by_pair.setdefault(pair, {})
+            by_pair[pair][strategy] = by_pair[pair].get(strategy, 0) + 1
+            by_tier.setdefault(tier, {})
+            by_tier[tier][strategy] = by_tier[tier].get(strategy, 0) + 1
+            by_difficulty.setdefault(difficulty, {})
+            by_difficulty[difficulty][strategy] = by_difficulty[difficulty].get(strategy, 0) + 1
+            strategy_accuracy.setdefault(strategy, []).append(bool(row.get("matched", False)))
         score["adaptive_strategy_usage"] = usage
+        score["adaptive_strategy_usage_by_pair"] = by_pair
+        score["adaptive_strategy_usage_by_tier"] = by_tier
+        score["adaptive_strategy_usage_by_difficulty"] = by_difficulty
+        score["adaptive_strategy_accuracy"] = {
+            strategy: (sum(1 for x in matches if x) / len(matches) if matches else 0.0)
+            for strategy, matches in strategy_accuracy.items()
+        }
 
     score["counts"] = {
         "ground_truth": {"raw": len(gt_rows_raw), "deduplicated": len(gt_rows)},
@@ -169,6 +195,7 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
     fp = [k for k in pred_keys - gt_keys]
     fn = [k for k in gt_keys - pred_keys]
     invalid = [r for r in reports if not r.get("valid")]
+    validation_reason_counts = violation_counts(reports)
     errors = {
         "false_positives": [{"source_path": s, "target_path": t, "mapping_type": m, "root_cause": "over_prediction"} for s, t, m in fp],
         "false_negatives": [{"source_path": s, "target_path": t, "mapping_type": m, "root_cause": "missed_mapping"} for s, t, m in fn],
@@ -188,7 +215,22 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
             for row in _load_optional_jsonl(out_dir / "predictions" / "llm_trace.jsonl")
             if row.get("expected_target_path") and (row.get("predicted_top") or {}).get("target_path") not in {"", row.get("expected_target_path")}
         ],
-        "cardinality_issues": [r for r in invalid if any(v.get("type", "").startswith("cardinality_") for v in r.get("violations", []))],
+        "cardinality_issues": [r for r in invalid if any(v.get("type", "") == "cardinality_issue" for v in r.get("violations", []))],
+        "validation_reasons": {
+            "schema_invalid": validation_reason_counts.get("schema_invalid", 0),
+            "duplicate_mapping": validation_reason_counts.get("duplicate_mapping", 0),
+            "confidence_low": validation_reason_counts.get("confidence_low", 0),
+            "invalid_path": validation_reason_counts.get("invalid_path", 0),
+            "cardinality_issue": validation_reason_counts.get("cardinality_issue", 0),
+            "empty_target_for_non_no_match": validation_reason_counts.get("empty_target_for_non_no_match", 0),
+            "wrong_transform": 0,
+            "retrieval_failure": 0,
+            "llm_hallucination": 0,
+        },
     }
+    errors["validation_reasons"]["wrong_transform"] = len(errors["wrong_transform"])
+    errors["validation_reasons"]["retrieval_failure"] = len(errors["retrieval_failures"])
+    errors["validation_reasons"]["llm_hallucination"] = len(errors["llm_hallucinations"])
     (out_dir / "error_analysis.json").write_text(json.dumps(errors, indent=2))
+    (out_dir / "error_summary.json").write_text(json.dumps(errors["validation_reasons"], indent=2))
     return score

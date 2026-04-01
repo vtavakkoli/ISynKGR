@@ -41,6 +41,10 @@ def _validate_mapping(mapping: dict, source_protocol: str, target_protocol: str,
 
     if float(mapping.get("confidence", 0.0)) < 0.5 and mapping.get("mapping_type") != MappingType.NO_MATCH.value:
         violations.append({"type": "confidence_low", "message": f"confidence too low: {mapping.get('confidence')}"})
+    if mapping.get("mapping_type") != MappingType.NO_MATCH.value and not str(mapping.get("target_path") or "").strip():
+        violations.append({"type": "empty_target_for_non_no_match", "message": "target_path is empty but mapping_type is not no_match"})
+    if str(mapping.get("target_path") or "").strip() and "://" not in str(mapping.get("target_path") or ""):
+        violations.append({"type": "invalid_path", "message": f"target path is not protocol qualified: {mapping.get('target_path')}"})
 
     dedup_key = _mapping_key(mapping)
     if dedup_key in seen_keys:
@@ -79,7 +83,7 @@ def _enforce_cardinality(sample_mappings: list[dict], contract: dict, item_viola
     trimmed = sorted(sample_mappings, key=_rank, reverse=True)[:expected_count]
     item_violations.append(
         {
-            "type": "cardinality_trimmed",
+            "type": "cardinality_issue",
             "message": (
                 f"Trimmed mappings from {len(sample_mappings)} to {expected_count} "
                 f"for mode={contract['mode']}"
@@ -228,7 +232,17 @@ def main() -> None:
             "llm_output": llm_entry.get("raw", {}),
         }
         llm_trace.append(llm_trace_item)
-        decision_trace.extend(metadata.get("decision_log", []))
+        for decision in metadata.get("decision_log", []):
+            decision_trace.append(
+                {
+                    **decision,
+                    "sample": sample_path.name,
+                    "pair": f"{str(row.get('source_standard', source_protocol)).upper()}->{str(row.get('target_standard', target_protocol)).upper()}",
+                    "tier": str(row.get("tier", tier)),
+                    "difficulty": str(row.get("difficulty", "unknown")),
+                    "matched": bool(top_pred and expected_target and top_pred.get("target_path") == expected_target),
+                }
+            )
         retrieval_trace.append(
             {
                 "sample": sample_path.name,
@@ -267,7 +281,7 @@ def main() -> None:
         if contract["mode"] != "grouped_1" and len(sample_mappings) != expected_count:
             item_violations.append(
                 {
-                    "type": "cardinality_mismatch",
+                    "type": "cardinality_issue",
                     "message": f"Expected {expected_count} mappings for sample in mode={contract['mode']}, got {len(sample_mappings)}",
                     "expected_count": expected_count,
                     "actual_count": len(sample_mappings),
@@ -283,6 +297,7 @@ def main() -> None:
             {
                 "sample": sample_path.name,
                 "tier": str(row.get("tier", tier)),
+                "difficulty": str(row.get("difficulty", "unknown")),
                 "pair": f"{str(row.get('source_standard', source_protocol)).upper()}->{str(row.get('target_standard', target_protocol)).upper()}",
                 "matched": bool(top_pred and expected_target and top_pred.get("target_path") == expected_target),
             }

@@ -17,11 +17,11 @@ from benchmark.validate_dataset import validate_or_generate
 SEEDS = [11, 23, 37]
 
 COMPONENT_FLAGS = {
-    "full_framework": {},
+    "full_framework": {"postprocess_snap": False},
     "rule_based_only": {"retrieval": False, "llm": False, "adaptive_selection": False},
     "llm_only": {"rules": False, "retrieval": False},
     "rag_only": {"rules": False, "llm": False},
-    "embedding_similarity": {"rules": False, "llm": False},
+    "embedding_similarity": {"rules": False, "llm": False, "adaptive_selection": False},
     "ablation_no_rules": {"rules": False},
     "ablation_no_retrieval": {"retrieval": False},
     "ablation_no_graph_expansion": {"postprocess_snap": False},
@@ -98,7 +98,10 @@ def _copy_gt_and_dataset(artifacts_dir: Path) -> None:
             target_id = f"iec61499://Device{i}/Res1/FB1/OUT_TEMP"
         else:
             target_id = f"{target_standard.lower()}://ns=2;s=bench{i}"
-        normalized = rec | {"source_path": source_id, "target_path": target_id}
+        is_no_match = i % 11 == 0
+        if is_no_match:
+            target_id = ""
+        normalized = rec | {"source_path": source_id, "target_path": target_id, "mapping_type": "no_match" if is_no_match else rec.get("mapping_type", "equivalent")}
         gt_rows.append(normalized)
         rows.append(
             {
@@ -110,10 +113,15 @@ def _copy_gt_and_dataset(artifacts_dir: Path) -> None:
                 "pair": f"{source_standard}->{target_standard}",
                 "tier": tiers[i % len(tiers)],
                 "difficulty": difficulties[i % len(difficulties)],
-                "transform_requirement": "unit_convert" if i % 4 == 0 else "none",
+                "transform_requirement": "unit_convert" if i % 4 == 0 else ("structural_change" if i % 6 == 0 else "none"),
                 "has_hard_negative": i % 7 == 0,
-                "is_no_match": i % 11 == 0,
+                "is_no_match": is_no_match,
                 "is_paraphrase": i % 5 == 0,
+                "has_noisy_label": i % 3 == 0,
+                "has_alias_synonym": i % 4 == 0,
+                "has_distractor_candidates": i % 7 == 0,
+                "has_partial_match": i % 6 == 0,
+                "cardinality_mode": "one_to_many" if i % 13 == 0 else ("many_to_one" if i % 17 == 0 else "one_to_one"),
                 "source_path": str(source_file),
             }
         )
@@ -180,22 +188,27 @@ def _write_error_tables(artifacts_dir: Path, rows: list[dict]) -> None:
     table_dir.mkdir(exist_ok=True)
     csv_path = table_dir / "error_summary.csv"
     with csv_path.open("w", newline="") as fp:
-        writer = csv.DictWriter(fp, fieldnames=["variant", "seed", "fp", "fn", "invalid", "wrong_transform", "retrieval_failure", "llm_hallucination", "cardinality_issue"])
+        writer = csv.DictWriter(fp, fieldnames=["variant", "seed", "fp", "fn", "schema_invalid", "duplicate_mapping", "confidence_low", "invalid_path", "cardinality_issue", "wrong_transform", "retrieval_failure", "llm_hallucination", "empty_target_for_non_no_match"])
         writer.writeheader()
         for row in rows:
             pred_dir = artifacts_dir / "predictions" / f"{row['baseline']}_seed{row['seed']}"
             analysis = json.loads((pred_dir / "error_analysis.json").read_text())
+            reasons = analysis.get("validation_reasons", {})
             writer.writerow(
                 {
                     "variant": row["baseline"],
                     "seed": row["seed"],
                     "fp": len(analysis.get("false_positives", [])),
                     "fn": len(analysis.get("false_negatives", [])),
-                    "invalid": len(analysis.get("invalid_path", [])),
+                    "schema_invalid": reasons.get("schema_invalid", 0),
+                    "duplicate_mapping": reasons.get("duplicate_mapping", 0),
+                    "confidence_low": reasons.get("confidence_low", 0),
+                    "invalid_path": reasons.get("invalid_path", 0),
+                    "cardinality_issue": reasons.get("cardinality_issue", 0),
                     "wrong_transform": len(analysis.get("wrong_transform", [])),
                     "retrieval_failure": len(analysis.get("retrieval_failures", [])),
                     "llm_hallucination": len(analysis.get("llm_hallucinations", [])),
-                    "cardinality_issue": len(analysis.get("cardinality_issues", [])),
+                    "empty_target_for_non_no_match": reasons.get("empty_target_for_non_no_match", 0),
                 }
             )
 

@@ -1,221 +1,120 @@
 # ISynKGR
 
-> **Industrial Semantic Knowledge Graph Reasoner**
->
-> A practical framework for standards-aware artifact translation using a hybrid approach:
-> **rules + adapters + retrieval (GraphRAG/vector) + LLM integration + deterministic evaluation**.
+ISynKGR is an industrial schema-mapping benchmark and translation framework that combines:
+- rule-based mapping,
+- retrieval-driven candidate discovery,
+- optional LLM mapping,
+- and reproducible evaluation/reporting.
 
-ISynKGR helps you translate data and mappings across industrial standards (AAS, OPC UA, IEC 61499, IEEE 1451), validate outputs, and benchmark pipelines end-to-end with reproducible metrics.
-
----
-
-## Why ISynKGR?
-
-Industrial interoperability projects fail when translation quality is hard to measure and harder to reproduce. ISynKGR is designed to solve that by combining:
-
-- **Deterministic validation** (schema and path validation)
-- **Composable translation pipelines** (rule-only, graph-only, rag-only, llm-only, hybrid)
-- **Benchmark harness** with scenario execution and scoring
-- **Containerized workflow** for repeatable local/CI execution
-
----
+This repository now focuses on **honest, reproducible comparisons** between the full framework, baselines, and ablations.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    %% Custom Colors and Styles (Slightly rounder corners rx:8 for a modern card look)
-    classDef input fill:#e0f7fa,stroke:#00bcd4,stroke-width:2px,color:#006064,rx:8,ry:8
-    classDef core fill:#ede7f6,stroke:#673ab7,stroke-width:2px,color:#311b92,rx:8,ry:8
-    classDef engine fill:#fff3e0,stroke:#ff9800,stroke-width:2px,color:#e65100,rx:8,ry:8
-    classDef merge fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px,color:#1a237e,rx:8,ry:8
-    classDef out fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#1b5e20,rx:8,ry:8
-    classDef metric fill:#fce4ec,stroke:#e91e63,stroke-width:2px,color:#880e4f,rx:8,ry:8
-
-    %% 1. Ingestion (Left Side)
-    A["📥 Inputs<br><small>AAS / OPC UA<br>IEC61499 / IEEE1451</small>"]:::input
-    B["🔌 Adapters<br><small>isynkgr/adapters</small>"]:::core
-    C["📦 Canonical Model<br><small>isynkgr/canonical</small>"]:::core
-
-    A --> B --> C
-
-    %% 2. Processing (Middle)
-    subgraph Processing["⚙️ Processing Engines"]
-        D1["📜 Rule Engine<br><small>isynkgr/rules</small>"]:::engine
-        D2["🔍 Retrieval<br><small>vector + GraphRAG</small>"]:::engine
-        D3["🤖 LLM Integration<br><small>Ollama client</small>"]:::engine
-    end
-
-    C --> D1 & D2 & D3
-
-    E["🔀 Pipeline<br>Variants"]:::merge
-    D1 & D2 & D3 --> E
-
-    %% 3. Output Pipeline (Right Side - Folded vertically for compactness!)
-    subgraph Delivery["🏁 Delivery & Evaluation"]
-        direction TB
-        F["📤 Translation<br><small>Mappings + Entities</small>"]:::out
-        G["✅ Validation<br><small>Schema + Path</small>"]:::out
-        H["📊 Evaluation<br><small>Metrics + Reports</small>"]:::metric
-        I["📄 Final Artifacts<br><small>JSON + MD + Charts</small>"]:::metric
-        
-        F --> G --> H --> I
-    end
-
-    E --> F
-
-    %% Subgraph Styling
-    style Processing fill:#f5f5f5,stroke:#bdbdbd,stroke-width:2px,stroke-dasharray: 4 4,rx:10,ry:10
-    style Delivery fill:#f5f5f5,stroke:#bdbdbd,stroke-width:2px,stroke-dasharray: 4 4,rx:10,ry:10
+    A[Source artifacts<br/>OPCUA / IEEE1451 / ISO15926] --> B[Adapters]
+    B --> C[Canonical model]
+    C --> D{Adaptive selector}
+    D -->|rules| E[Rule engine]
+    D -->|retrieval| F[Graph retrieval]
+    D -->|llm| G[LLM mapping]
+    F --> H[Candidate validation + optional snap]
+    E --> I[Merge + deduplicate]
+    G --> I
+    H --> I
+    I --> J[Output validation<br/>schema/cardinality/path]
+    J --> K[Predictions + traces]
+    K --> L[Evaluation metrics<br/>pair/tier/difficulty + strategy usage]
+    L --> M[Reports<br/>CSV + markdown + charts]
 ```
 
-### Pipeline modes
+## What the framework does
 
-- `rule_only`
-- `graph_only`
-- `rag_only`
+Given source artifacts (e.g., OPC UA / IEEE1451 / ISO15926-like inputs), ISynKGR produces mapping predictions into target standards (e.g., AAS / IEC61499-like targets), validates those predictions, and evaluates performance and failure modes.
+
+Core modules:
+- `isynkgr/` — adapters, pipeline, retrieval, rules, validation.
+- `benchmark/` — orchestration, dataset materialization, evaluation, report generation.
+- `docs/` — scenario definitions and implementation notes.
+
+## Scenarios
+
+The full run executes these scenarios:
+- `full_framework`
+- `rule_based_only`
 - `llm_only`
-- `hybrid`
+- `rag_only`
+- `embedding_similarity`
+- `ablation_no_rules`
+- `ablation_no_retrieval`
+- `ablation_no_graph_expansion`
+- `ablation_no_llm`
+- `ablation_no_reasoning_prompt`
+- `ablation_no_community_filter`
+- `ablation_no_parallel_retrieval`
 
-Each mode can be benchmarked under the same dataset and metric contract to compare quality and cost/performance trade-offs.
+Scenario component toggles are documented in `docs/SCENARIO_MATRIX.md`.
 
----
+## Metrics produced
 
-## Repository layout
+For each scenario/seed the pipeline exports:
+- precision / recall / f1
+- validity_pass_rate
+- transform_correctness
+- retrieval_recall_at_1, retrieval_recall_at_5
+- retrieval_hit_at_1, retrieval_hit_at_5
+- latency_per_sample_s
+- runtime_per_scenario_s
+- token_usage_prompt / token_usage_completion
+- memory_peak_mb
+- confidence_calibration_error
+- pred_count / gt_count / matched_count
 
-- `isynkgr/` – core library (adapters, canonical model, pipeline, retrieval, rules, validation)
-- `benchmark/` – benchmark orchestration, harness, metrics, report generation
-- `examples/` – quick translation examples
-- `scripts/` – helper scripts for sample generation and benchmark execution
-- `docs/` – architecture, benchmark notes, datasets, extension guidance
-- `docker-compose.yml` – reproducible benchmark services
+And stratified outputs:
+- per-pair
+- per-tier
+- per-difficulty
+- per-mapping-type
 
----
+Error taxonomy and validation-reason exports are written per scenario seed (`error_analysis.json`, `error_summary.json`) and aggregated in report tables.
 
-## Installation
+## Run the benchmark
 
-### Local editable install
-
-```bash
-pip install --no-build-isolation -e .
-```
-
-### With development tools
-
-```bash
-pip install --no-build-isolation -e .[dev]
-```
-
----
-
-## CLI entry points
-
-After installation, these commands are available:
-
-- `isynkgr-gen-samples` – generate synthetic samples + ground truth + validation
-- `isynkgr-benchmark` – run benchmark execution entry point
-
----
-
-## Quickstart
-
-### 1) Run tests
-
-```bash
-PYTHONPATH=. pytest -q
-```
-
-### 2) Run a small benchmark locally
-
-```bash
-PYTHONPATH=. python -m benchmark.harness
-```
-
-### 3) Run a full containerized pipeline
+### Docker (full workflow)
 
 ```bash
 docker compose up --build full-run
 ```
 
----
+### Equivalent local Python command
 
-## Docker services and Makefile targets
+```bash
+PYTHONPATH=. python -m benchmark.orchestrate
+```
 
-The Makefile docker targets are aligned to compose services:
+Both execute the same top-level workflow:
+1. dataset validation/materialization,
+2. multi-scenario + multi-seed execution,
+3. evaluation,
+4. report export.
 
-- `make docker-sample-validate` → `sample-validate`
-- `make docker-full-run` → `full-run`
-- `make docker-run-scenario` → `run-scenario`
-- `make docker-evaluate` → `evaluate`
-- `make docker-report` → `report`
+## Where outputs are saved
 
----
+Primary artifacts:
+- `artifacts/run_<timestamp>/dataset.jsonl`
+- `artifacts/run_<timestamp>/ground_truth.jsonl`
+- `artifacts/run_<timestamp>/predictions/<scenario>_seed<seed>/...`
+- `artifacts/run_<timestamp>/metrics.json`
+- `artifacts/run_<timestamp>/tables/*.csv`
+- `artifacts/run_<timestamp>/plots/*.png`
+- `artifacts/run_<timestamp>/report.md`
+- `artifacts/run_<timestamp>/report.html`
 
-## Benchmark flow
+Compatibility symlink/copy is also exposed under `results/run_<timestamp>/`.
 
-1. **Sample validation** (`sample-validate`) confirms generated datasets are structurally valid.
-2. **Scenario execution** runs one or more translation modes.
-3. **Evaluation** computes matching/quality metrics.
-4. **Report generation** merges outputs into final consumable artifacts.
+## Reproducibility notes
 
-Default scenario family used in full orchestration:
-
-- `baseline`
-- `full_framework`
-- `ablation_no_graphrag`
-- `ablation_no_parallel`
-- `ablation_no_community`
-- `ablation_no_reasoning`
-
----
-
-## Outputs
-
-Typical outputs appear under `results/`:
-
-- `results/<scenario>/predictions/mappings.jsonl`
-- `results/<scenario>/metrics.json`
-- `results/<scenario>/logs/run.log`
-- `results/final/report.md`
-- `results/final/metrics_merged.json`
-- `results/final/charts/*.png`
-
----
-
-## Determinism and reproducibility
-
-ISynKGR is built for reproducible experiments:
-
-- fixed `SEED` support
-- explicit `MODEL_NAME`
-- persisted resolved config per run
-- logged execution artifacts
-
----
-
-## Path validation guarantees
-
-ISynKGR validates mapping `source_path` and `target_path` with protocol-specific regex patterns:
-
-- **AAS**: `aas://{aas_id}/submodel/{sm_idShort}/element/{path...}`
-- **OPC UA**: `opcua://ns={ns};s={string_id}` or `opcua://ns={ns};i={int_id}`
-- **IEC 61499 (subset)**: `iec61499://{device}/{resource}/{fb}/{var}`
-- **IEEE 1451 (subset)**: `ieee1451://{ted_id}/{channel}/{field}`
-
-Validation is fully anchored and designed to avoid pathological backtracking.
-
----
-
-## Documentation
-
-- `docs/ARCHITECTURE.md`
-- `docs/BENCHMARKS.md`
-- `docs/DATASETS.md`
-- `docs/BASELINES.md`
-- `docs/EXTENDING.md`
-
----
-
-## License
-
-Distributed under the MIT License. See `LICENSE`.
+- Seeds are fixed in the full workflow (`11, 23, 37`).
+- Scenario flags are explicit and versioned.
+- Reports are generated from exported artifacts (no manual metric editing).
+- Limitations are documented in `docs/IMPLEMENTATION_DIAGNOSIS.md`.
