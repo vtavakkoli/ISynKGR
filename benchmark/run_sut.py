@@ -33,7 +33,13 @@ def _read_dataset(dataset_dir: Path, max_samples: int) -> list[dict]:
     return [{"id": f.stem, "source_path": str(f)} for i, f in enumerate(opc_files)]
 
 
-def _validate_mapping(mapping: dict, source_protocol: str, target_protocol: str, seen_keys: set[tuple[str, str, str]]) -> tuple[bool, list[dict], dict | None]:
+def _validate_mapping(
+    mapping: dict,
+    source_protocol: str,
+    target_protocol: str,
+    seen_keys: set[tuple[str, str, str]],
+    semantic_context: dict[str, dict] | None = None,
+) -> tuple[bool, list[dict], dict | None]:
     violations: list[dict] = []
     is_ok, error = validate_mapping_item(mapping, source_protocol=source_protocol, target_protocol=target_protocol)
     if not is_ok:
@@ -51,6 +57,21 @@ def _validate_mapping(mapping: dict, source_protocol: str, target_protocol: str,
         violations.append({"type": "duplicate_mapping", "message": f"Duplicate mapping key: {dedup_key}"})
     else:
         seen_keys.add(dedup_key)
+
+    semantic = semantic_context or {}
+    source_info = semantic.get(str(mapping.get("source_path", "")), {})
+    if mapping.get("mapping_type") != MappingType.NO_MATCH.value:
+        candidate_paths = set(source_info.get("candidate_paths", []))
+        if candidate_paths and mapping.get("target_path") not in candidate_paths:
+            violations.append({"type": "semantic_target_not_in_schema_candidates", "message": "target_path not found in source-node retrieval candidates"})
+        source_dtype = str(source_info.get("source_dtype", "")).upper()
+        target_dtype = str(source_info.get("target_dtype", "")).upper()
+        if source_dtype and target_dtype and source_dtype != target_dtype:
+            violations.append({"type": "semantic_dtype_mismatch", "message": f"source_dtype={source_dtype} target_dtype={target_dtype}"})
+        source_unit = str(source_info.get("source_unit", "")).lower()
+        target_unit = str(source_info.get("target_unit", "")).lower()
+        if source_unit and target_unit and source_unit != target_unit:
+            violations.append({"type": "semantic_unit_mismatch", "message": f"source_unit={source_unit} target_unit={target_unit}"})
 
     return (len(violations) == 0), violations, mapping
 
@@ -145,6 +166,7 @@ def main() -> None:
 
     def log(msg: str) -> None:
         print(msg, flush=True)
+        progress_log.parent.mkdir(parents=True, exist_ok=True)
         with progress_log.open("a") as fp:
             fp.write(msg + "\n")
 
@@ -212,9 +234,26 @@ def main() -> None:
 
         item_violations: list[dict] = []
         sample_mappings: list[dict] = []
+        component_debug = metadata.get("component_outputs", {})
+        retrieval_by_source = component_debug.get("retrieval", {}) if isinstance(component_debug, dict) else {}
+        semantic_context: dict[str, dict] = {}
+        for source_id, candidates in retrieval_by_source.items():
+            candidate_paths = [str(c.get("candidate_path", "")) for c in candidates if str(c.get("candidate_path", "")).strip()]
+            top = candidates[0] if candidates else {}
+            semantic_context[str(source_id)] = {
+                "candidate_paths": candidate_paths,
+                "target_dtype": (top.get("breakdown", {}) or {}).get("target_dtype", top.get("datatype", "")),
+                "target_unit": top.get("unit", ""),
+            }
         for m in result.mappings:
             record = m.model_dump()
-            is_valid, violations, normalized = _validate_mapping(record, source_protocol=row_source_protocol, target_protocol=row_target_protocol, seen_keys=seen_keys)
+            is_valid, violations, normalized = _validate_mapping(
+                record,
+                source_protocol=row_source_protocol,
+                target_protocol=row_target_protocol,
+                seen_keys=seen_keys,
+                semantic_context=semantic_context,
+            )
             if not is_valid:
                 item_violations.extend(violations)
             if normalized is not None:
@@ -241,7 +280,6 @@ def main() -> None:
 
         top_pred = sample_mappings[0] if sample_mappings else None
         llm_entry = (metadata.get("llm_raw_output") or [{}])[0]
-        component_debug = metadata.get("component_outputs", {})
         llm_trace_item = {
             "sample": sample_path.name,
             "mode": mode,

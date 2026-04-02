@@ -10,10 +10,10 @@ from isynkgr.adapters.iec61499 import IEC61499Adapter
 from isynkgr.adapters.ieee1451 import IEEE1451Adapter
 from isynkgr.adapters.iso15926 import ISO15926Adapter
 from isynkgr.adapters.opcua import OPCUAAdapter
-from isynkgr.canonical.model import CanonicalModel
+from isynkgr.canonical.model import CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import EvidenceItem, Mapping, Provenance, TranslationResult
 from isynkgr.icr.mapping_output_contract import normalize_mapping_item, normalize_mapping_items
-from isynkgr.icr.path_validation import validate_protocol_path
+from isynkgr.icr.entities import build_endpoint_path, normalize_path
 from isynkgr.llm.ollama import OllamaClient
 from isynkgr.pipeline.prompting import build_mapping_prompt
 from isynkgr.retrieval.graphrag import GraphRAGRetriever
@@ -42,8 +42,12 @@ class TranslatorConfig:
 ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter(), "iec61499": IEC61499Adapter(), "ieee1451": IEEE1451Adapter(), "iso15926": ISO15926Adapter()}
 
 
-def _mapping_key(mapping: Mapping) -> tuple[str, str, str]:
-    return (mapping.source_path, mapping.target_path, str(mapping.mapping_type))
+# Diagnosis note:
+# - previous hybrid behavior collapsed to a single branch via selected_strategy.
+# - retrieval candidates were flattened globally and mapped by list index.
+# - synthetic shortcuts dominated rules unless explicitly disabled.
+# - target model for rules/retrieval reused source nodes, which disabled real target reasoning.
+# - merge step deduplicated tuples but did not pick a single best mapping per source node.
 
 
 def _git_commit() -> str:
@@ -67,129 +71,162 @@ def _schema_summary(model: CanonicalModel) -> dict[str, Any]:
     }
 
 
-def _candidate_paths(evidence: list[Any], target_standard: str) -> list[str]:
-    out: list[str] = []
-    prefix = f"{target_standard.lower()}://"
+def _build_default_target_model(target_standard: str) -> CanonicalModel:
+    std = target_standard.lower()
+    if std == "aas":
+        labels = ["temperature", "pressure", "flow", "state", "speed", "vibration"]
+        nodes = [
+            CanonicalNode(id=f"aas://asset/submodel/default/element/{label}/value", type="Property", label=label, attributes={"datatype": "FLOAT" if label != "state" else "STRING"})
+            for label in labels
+        ]
+        return CanonicalModel(standard=std, nodes=nodes, edges=[])
+    if std == "iec61499":
+        nodes = [
+            CanonicalNode(id="iec61499://Device0/Res1/FB1/temp", type="Signal", label="temperature", attributes={"dtype": "FLOAT", "unit": "C"}),
+            CanonicalNode(id="iec61499://Device0/Res1/FB1/pressure", type="Signal", label="pressure", attributes={"dtype": "FLOAT", "unit": "bar"}),
+            CanonicalNode(id="iec61499://Device0/Res1/FB1/state", type="Signal", label="state", attributes={"dtype": "STRING"}),
+        ]
+        return CanonicalModel(standard=std, nodes=nodes, edges=[])
+    if std == "ieee1451":
+        nodes = [
+            CanonicalNode(id="ieee1451://teds0/ch0/value", type="Channel", label="temperature", attributes={"dtype": "FLOAT", "unit": "C"}),
+            CanonicalNode(id="ieee1451://teds0/ch1/value", type="Channel", label="pressure", attributes={"dtype": "FLOAT", "unit": "bar"}),
+        ]
+        return CanonicalModel(standard=std, nodes=nodes, edges=[])
+    if std == "opcua":
+        nodes = [
+            CanonicalNode(id="opcua://ns=2;s=Temperature", type="UAVariable", label="temperature", attributes={"datatype": "FLOAT", "unit": "C"}),
+            CanonicalNode(id="opcua://ns=2;s=Pressure", type="UAVariable", label="pressure", attributes={"datatype": "FLOAT", "unit": "bar"}),
+        ]
+        return CanonicalModel(standard=std, nodes=nodes, edges=[])
+    return CanonicalModel(standard=std, nodes=[CanonicalNode(id=f"{std}://candidate/default/value", type="Candidate", label="value", attributes={})], edges=[])
+
+
+def _canonical_source_path(source_standard: str, raw_path: str) -> str:
+    return normalize_path(raw_path if "://" in str(raw_path or "") else build_endpoint_path(source_standard, str(raw_path or "")))
+
+
+def _group_evidence_by_source(evidence: list[EvidenceItem], source_paths: list[str]) -> dict[str, list[EvidenceItem]]:
+    grouped: dict[str, list[EvidenceItem]] = {}
     for item in evidence:
-        payload = getattr(item, "payload", {}) or {}
-        candidate = str(payload.get("candidate_path") or payload.get("target_hint") or "").strip()
-        if candidate.startswith(prefix):
-            out.append(candidate)
-    # preserve order and de-duplicate
+        source_node = str((item.payload or {}).get("source_node", "")).strip()
+        if not source_node and len(source_paths) == 1:
+            source_node = source_paths[0]
+        if not source_node:
+            continue
+        grouped.setdefault(source_node, []).append(item)
+    for source_node in grouped:
+        grouped[source_node] = sorted(grouped[source_node], key=lambda x: float(x.score), reverse=True)
+    return grouped
+
+
+def _path_list_for_source(by_source: dict[str, list[EvidenceItem]], source_path: str, target_standard: str) -> list[str]:
+    prefix = f"{target_standard.lower()}://"
+    out: list[str] = []
     seen: set[str] = set()
-    dedup: list[str] = []
-    for c in out:
-        if c not in seen:
-            seen.add(c)
-            dedup.append(c)
-    return dedup
+    for item in by_source.get(source_path, []):
+        candidate = str((item.payload or {}).get("candidate_path") or (item.payload or {}).get("target_hint") or "").strip()
+        if candidate.startswith(prefix) and candidate not in seen:
+            seen.add(candidate)
+            out.append(candidate)
+    return out
 
 
-def _emit_graph_only_mappings(
+def _target_compatibility(mapping: Mapping, target_model: CanonicalModel) -> float:
+    if mapping.mapping_type.value == "no_match":
+        return 0.25
+    target_index = {n.id: n for n in target_model.nodes}
+    node = target_index.get(mapping.target_path)
+    if node is None:
+        return 0.0
+    return 1.0
+
+
+def _merge_per_source(
     source_model: CanonicalModel,
-    evidence: list[EvidenceItem],
+    source_paths: list[str],
     source_standard: str,
     target_standard: str,
-) -> list[Mapping]:
-    candidates = _candidate_paths(evidence, target_standard)
-    mappings: list[Mapping] = []
-    for idx, node in enumerate(source_model.nodes):
-        candidate = candidates[idx] if idx < len(candidates) else ""
-        candidate_ok = False
-        if candidate:
-            try:
-                validate_protocol_path(candidate, "target_path")
-                candidate_ok = True
-            except ValueError:
-                candidate_ok = False
-        if candidate_ok:
-            mappings.append(
-                normalize_mapping_item(
-                    {
-                        "source_path": node.id,
-                        "target_path": candidate,
-                        "mapping_type": "equivalent",
-                        "transform": None,
-                        "confidence": 0.8,
-                        "rationale": "Graph retrieval selected the highest ranked target candidate.",
-                        "evidence": ["graph:target_candidate"],
-                    },
-                    source_standard,
-                    target_standard,
-                )
-            )
-            continue
-        mappings.append(
-            normalize_mapping_item(
+    target_model: CanonicalModel,
+    retrieval_by_source: dict[str, list[EvidenceItem]],
+    rules_by_source: dict[str, list[Mapping]],
+    llm_by_source: dict[str, list[Mapping]],
+    preference_by_source: dict[str, dict[str, float]],
+) -> tuple[list[Mapping], dict[str, Any]]:
+    final: list[Mapping] = []
+    trace: dict[str, Any] = {"alternatives": {}, "winning_reason": {}}
+
+    for _node, source_path in zip(source_model.nodes, source_paths):
+        candidates: list[tuple[float, str, Mapping, str]] = []
+
+        for m in rules_by_source.get(source_path, []):
+            score = float(m.confidence) * preference_by_source[source_path]["rules"] * _target_compatibility(m, target_model)
+            candidates.append((score, "rules", m, "rule confidence + compatibility"))
+
+        for ev in retrieval_by_source.get(source_path, []):
+            retrieval_mapping = normalize_mapping_item(
                 {
-                    "source_path": node.id,
-                    "target_path": "",
-                    "mapping_type": "no_match",
+                    "source_path": source_path,
+                    "target_path": str(ev.payload.get("candidate_path") or ""),
+                    "mapping_type": "equivalent",
                     "transform": None,
-                    "confidence": 0.0,
-                    "rationale": "Graph retrieval did not contain a candidate target for this source node.",
-                    "evidence": ["graph:no_candidate"],
+                    "confidence": float(ev.score),
+                    "rationale": "Retrieval candidate for source node.",
+                    "evidence": ["retrieval:ranked_candidate"],
                 },
                 source_standard,
                 target_standard,
             )
+            score = float(retrieval_mapping.confidence) * preference_by_source[source_path]["retrieval"] * _target_compatibility(retrieval_mapping, target_model)
+            candidates.append((score, "retrieval", retrieval_mapping, "retrieval score + compatibility"))
+
+        for m in llm_by_source.get(source_path, []):
+            score = float(m.confidence) * preference_by_source[source_path]["llm"] * _target_compatibility(m, target_model)
+            candidates.append((score, "llm", m, "llm confidence + compatibility"))
+
+        if not candidates:
+            winner = normalize_mapping_item(
+                {
+                    "source_path": source_path,
+                    "target_path": "",
+                    "mapping_type": "no_match",
+                    "transform": None,
+                    "confidence": 0.0,
+                    "rationale": "No component produced candidate for this source node.",
+                    "evidence": ["merge:no_candidates"],
+                },
+                source_standard,
+                target_standard,
+            )
+            final.append(winner)
+            trace["alternatives"][source_path] = []
+            trace["winning_reason"][source_path] = "No candidates available."
+            continue
+
+        agreement_bonus: dict[str, float] = {}
+        for _score, _component, m, _reason in candidates:
+            agreement = sum(1 for _, _, other, _ in candidates if other.target_path and other.target_path == m.target_path)
+            agreement_bonus[m.target_path] = 0.08 * max(0, agreement - 1)
+
+        rescored = [
+            (score + agreement_bonus.get(m.target_path, 0.0), component, m, reason)
+            for score, component, m, reason in candidates
+        ]
+        rescored.sort(key=lambda row: row[0], reverse=True)
+        best_score, best_component, best_mapping, best_reason = rescored[0]
+        final.append(best_mapping)
+        trace["alternatives"][source_path] = [
+            {"component": component, "target_path": m.target_path, "score": s, "confidence": m.confidence, "mapping_type": m.mapping_type.value}
+            for s, component, m, _ in rescored[:6]
+        ]
+        trace["winning_reason"][source_path] = (
+            f"Selected {best_component} target {best_mapping.target_path or '<no_match>'} with merged score {best_score:.3f}; policy={best_reason}."
         )
-    return mappings
+    return final, trace
 
 
-def _snap_mapping_to_candidates(mapping: Mapping, candidates: list[str], source_standard: str, target_standard: str) -> Mapping:
-    if not candidates or mapping.mapping_type.value == "no_match":
-        return mapping
-    if mapping.target_path in candidates:
-        return mapping
-
-    chosen = ""
-    if len(candidates) == 1:
-        chosen = candidates[0]
-    else:
-        ranked = sorted(
-            ((difflib.SequenceMatcher(a=mapping.target_path, b=c).ratio(), c) for c in candidates),
-            reverse=True,
-        )
-        if ranked and ranked[0][0] >= 0.72:
-            chosen = ranked[0][1]
-
-    if not chosen:
-        return mapping
-
-    return normalize_mapping_item(
-        {
-            "source_path": mapping.source_path,
-            "target_path": chosen,
-            "mapping_type": mapping.mapping_type.value,
-            "transform": mapping.transform.model_dump() if mapping.transform else None,
-            "confidence": mapping.confidence,
-            "rationale": f"{mapping.rationale} Target path snapped to retrieval candidate.",
-            "evidence": [*mapping.evidence, "postprocess:candidate_snap"],
-        },
-        source_standard,
-        target_standard,
-    )
-
-
-def _constrain_mapping_to_candidates(mapping: Mapping, candidates: list[str], source_standard: str, target_standard: str) -> Mapping:
-    if not candidates or mapping.mapping_type.value == "no_match":
-        return mapping
-    if mapping.target_path in candidates:
-        return mapping
-    return normalize_mapping_item(
-        {
-            "source_path": mapping.source_path,
-            "target_path": "",
-            "mapping_type": "no_match",
-            "transform": None,
-            "confidence": min(mapping.confidence, 0.3),
-            "rationale": f"{mapping.rationale} Rejected because target was outside retrieved candidate set.",
-            "evidence": [*mapping.evidence, "constraint:candidate_set"],
-        },
-        source_standard,
-        target_standard,
-    )
+def _lexical_similarity(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(a=str(a or "").lower(), b=str(b or "").lower()).ratio()
 
 
 @dataclass
@@ -217,104 +254,84 @@ class HybridPipeline:
             "community_filter": True,
             "parallel_retrieval": True,
             "allow_synthetic_benchmark_shortcuts": True,
-            "constrain_llm_to_candidates": True,
+            "constrain_llm_to_candidates": False,
+            "strict_llm_on_high_confidence_retrieval": True,
         }
         flags.update(config.component_flags or {})
+
+        if mode == "rule_only":
+            flags.update({"retrieval": False, "llm": False})
+        elif mode in {"rag_only", "graph_only", "embedding_only"}:
+            flags.update({"rules": False, "llm": False, "retrieval": True})
+        elif mode == "llm_only":
+            flags.update({"rules": False, "retrieval": False, "llm": True})
+
         src = ADAPTERS[source_standard]
         tgt = ADAPTERS[target_standard]
         source_model = src.parse(source_raw)
-        evidence = self.retriever.retrieve(source_model, target_standard) if mode in {"hybrid", "rag_only", "graph_only"} and flags["retrieval"] else []
-        if evidence and not flags["community_filter"]:
-            evidence = sorted(evidence, key=lambda item: float(item.score), reverse=True)[: max(1, len(evidence) // 3)]
-        if evidence and not flags["parallel_retrieval"]:
-            evidence = evidence[:1]
+        source_paths = [_canonical_source_path(source_standard, node.id) for node in source_model.nodes]
+        def _resolve_source_key(candidate_source: str) -> str:
+            if candidate_source in source_paths:
+                return candidate_source
+            return source_paths[0] if len(source_paths) == 1 else candidate_source
+        target_model = _build_default_target_model(target_standard)
+
+        evidence: list[EvidenceItem] = []
+        if flags["retrieval"]:
+            evidence = self.retriever.retrieve(
+                source_model,
+                target_standard,
+                target_model=target_model,
+                top_k=5,
+                enable_vector=config.enable_vector_retrieval,
+            )
         if target_candidates:
             for candidate in target_candidates:
-                evidence.append(
-                    EvidenceItem(
-                        id=f"candidate:{candidate}",
-                        kind="target_candidate",
-                        text=candidate,
-                        score=1.0,
-                        payload={"candidate_path": candidate, "target_hint": candidate},
+                for source_path in source_paths:
+                    evidence.append(
+                        EvidenceItem(
+                            id=f"candidate:{source_path}:{candidate}",
+                            kind="target_candidate",
+                            text=candidate,
+                            score=0.99,
+                            payload={"source_node": source_path, "candidate_path": candidate, "target_hint": candidate, "label": candidate.rsplit("/", 2)[-2]},
+                        )
                     )
-                )
 
-        mappings: list[Mapping] = []
-        rejected: list[dict[str, Any]] = []
+        retrieval_by_source = _group_evidence_by_source(evidence, source_paths=source_paths)
+        rules_by_source: dict[str, list[Mapping]] = {}
+        llm_by_source: dict[str, list[Mapping]] = {}
         llm_raw_output: list[dict[str, Any]] = []
-        decision_log: list[dict[str, Any]] = []
+        rejected: list[dict[str, Any]] = []
+        component_outputs: dict[str, Any] = {"rule_engine": {}, "retrieval": {}, "llm": {}, "merged": []}
 
-        retrieval_top_score = max((float(item.score) for item in evidence), default=0.0)
-        schema_match_signal = 1.0 if source_standard != target_standard else 0.5
-        default_strategy = "rules" if schema_match_signal >= 0.7 else "llm"
-        selected_strategy = default_strategy
-        if mode == "hybrid" and flags["adaptive_selection"]:
-            if retrieval_top_score >= 0.95 and flags["retrieval"]:
-                selected_strategy = "retrieval"
-            elif schema_match_signal >= 0.75 and flags["rules"]:
-                selected_strategy = "rules"
-            elif flags["llm"]:
-                selected_strategy = "llm"
-            else:
-                selected_strategy = "rules"
-            decision_log.append(
-                {
-                    "mode": mode,
-                    "selected_strategy": selected_strategy,
-                    "signals": {
-                        "retrieval_top_score": retrieval_top_score,
-                        "schema_match_signal": schema_match_signal,
-                    },
-                }
-            )
-
-        component_outputs: dict[str, list[dict[str, Any]]] = {"rule_engine": [], "retrieval": [], "llm": [], "merged": []}
-        component_outputs["retrieval"] = [
-            {"id": item.id, "score": item.score, "payload": item.payload}
-            for item in evidence
-        ]
-
-        run_rules = (
-            (mode == "rule_only" and flags["rules"])
-            or (mode == "hybrid" and flags["rules"] and (not flags["adaptive_selection"] or selected_strategy == "rules"))
-        )
-        rules_ran = False
-        if run_rules:
-            rules_ran = True
+        if flags["rules"]:
             rule_mappings = self.rules.apply_rules(
                 source_model,
                 target_standard,
+                target=target_model,
                 allow_synthetic_shortcuts=bool(flags.get("allow_synthetic_benchmark_shortcuts", True)),
             )
             rule_report = normalize_mapping_items([m.model_dump() for m in rule_mappings], source_standard, target_standard, method="rule")
-            mappings.extend(rule_report.accepted)
-            component_outputs["rule_engine"] = [m.model_dump() for m in rule_report.accepted]
+            for m in rule_report.accepted:
+                normalized_source = _canonical_source_path(source_standard, m.source_path)
+                normalized_source = _resolve_source_key(normalized_source)
+                normalized_mapping = normalize_mapping_item(
+                    {**m.model_dump(), "source_path": normalized_source},
+                    source_standard,
+                    target_standard,
+                )
+                rules_by_source.setdefault(normalized_source, []).append(normalized_mapping)
+            component_outputs["rule_engine"] = {k: [m.model_dump() for m in v] for k, v in rules_by_source.items()}
             rejected.extend([item.model_dump() for item in rule_report.rejected])
-        elif mode in {"graph_only", "embedding_only"} or (mode == "hybrid" and selected_strategy == "retrieval"):
-            graph_report = normalize_mapping_items(
-                [m.model_dump() for m in _emit_graph_only_mappings(source_model, evidence, source_standard, target_standard)],
-                source_standard,
-                target_standard,
-                method="graph",
-            )
-            mappings.extend(graph_report.accepted)
-            component_outputs["rule_engine"] = [m.model_dump() for m in graph_report.accepted]
-            rejected.extend([item.model_dump() for item in graph_report.rejected])
 
         llm_error = None
-        run_llm = (
-            (mode in {"llm_only", "rag_only"} and flags["llm"])
-            or (mode == "hybrid" and flags["llm"] and (not flags["adaptive_selection"] or selected_strategy == "llm"))
-        )
-        llm_mappings: list[Mapping] = []
-        snapped_to_candidate = False
-        if run_llm:
+        if flags["llm"]:
             prompt = build_mapping_prompt(
                 source_protocol=source_standard,
                 target_protocol=target_standard,
                 source_schema_summary=_schema_summary(source_model),
-                target_schema_summary={"standard": target_standard},
+                target_schema_summary=_schema_summary(target_model),
                 source_model=source_model,
                 evidence=evidence,
                 use_reasoning_prompt=flags["reasoning_prompt"],
@@ -331,80 +348,191 @@ class HybridPipeline:
             )
             llm_error = raw.get("_llm_error")
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
-            candidates = _candidate_paths(evidence, target_standard)
-            if flags["postprocess_snap"]:
-                snapped = [_snap_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_report.accepted]
-                snapped_to_candidate = any(m.target_path != n.target_path for m, n in zip(llm_report.accepted, snapped))
-                llm_candidates = snapped
-            else:
-                llm_candidates = llm_report.accepted
-            if flags.get("constrain_llm_to_candidates", True):
-                llm_mappings = [_constrain_mapping_to_candidates(m, candidates, source_standard, target_standard) for m in llm_candidates]
-            else:
-                llm_mappings = llm_candidates
-            mappings.extend(llm_mappings)
-            component_outputs["llm"] = [m.model_dump() for m in llm_mappings]
-            rejected.extend([item.model_dump() for item in llm_report.rejected])
-        if mode == "rag_only" and not llm_mappings:
-            graph_report = normalize_mapping_items(
-                [m.model_dump() for m in _emit_graph_only_mappings(source_model, evidence, source_standard, target_standard)],
-                source_standard,
-                target_standard,
-                method="graph_fallback",
-            )
-            mappings.extend(graph_report.accepted)
-            rejected.extend([item.model_dump() for item in graph_report.rejected])
-
-
-        if not mappings:
-            for node in source_model.nodes:
-                mappings.append(
-                    normalize_mapping_item(
-                        {
-                            "source_path": node.id,
-                            "target_path": "",
-                            "mapping_type": "no_match",
-                            "transform": None,
-                            "confidence": 0.0,
-                            "rationale": "No valid mappings were emitted by this method.",
-                            "evidence": [],
-                        },
-                        source_standard,
-                        target_standard,
-                    )
+            for m in llm_report.accepted:
+                normalized_source = _canonical_source_path(source_standard, m.source_path)
+                normalized_source = _resolve_source_key(normalized_source)
+                source_candidates = _path_list_for_source(retrieval_by_source, normalized_source, target_standard)
+                top_score = retrieval_by_source.get(normalized_source, [EvidenceItem(id="", kind="", text="", score=0.0)])[0].score if retrieval_by_source.get(normalized_source) else 0.0
+                constrained = bool(flags.get("strict_llm_on_high_confidence_retrieval", True) and top_score >= 0.85 and mode != "llm_only")
+                llm_candidate = normalize_mapping_item(
+                    {**m.model_dump(), "source_path": normalized_source},
+                    source_standard,
+                    target_standard,
                 )
+                if source_candidates and llm_candidate.target_path not in source_candidates:
+                    snapped_target = ""
+                    if flags["postprocess_snap"] and not constrained:
+                        if len(source_candidates) == 1:
+                            snapped_target = source_candidates[0]
+                        else:
+                            scored = sorted(
+                                ((difflib.SequenceMatcher(a=llm_candidate.target_path, b=c).ratio(), c) for c in source_candidates),
+                                reverse=True,
+                            )
+                            if scored and scored[0][0] >= 0.72:
+                                snapped_target = scored[0][1]
+                    if snapped_target:
+                        llm_candidate = normalize_mapping_item(
+                            {
+                                **llm_candidate.model_dump(),
+                                "source_path": normalized_source,
+                                "target_path": snapped_target,
+                                "rationale": f"{llm_candidate.rationale} (snapped to retrieved candidate)",
+                                "evidence": [*llm_candidate.evidence, "llm:candidate_snap"],
+                            },
+                            source_standard,
+                            target_standard,
+                        )
+                if source_candidates and llm_candidate.target_path not in source_candidates:
+                    if constrained:
+                        replacement = normalize_mapping_item(
+                            {
+                                "source_path": normalized_source,
+                                "target_path": "",
+                                "mapping_type": "no_match",
+                                "transform": None,
+                                "confidence": min(float(llm_candidate.confidence), 0.35),
+                                "rationale": "LLM target rejected because high-confidence retrieval disagreed.",
+                                "evidence": [*llm_candidate.evidence, "llm:outside_high_confidence_candidates"],
+                            },
+                            source_standard,
+                            target_standard,
+                        )
+                        llm_by_source.setdefault(normalized_source, []).append(replacement)
+                    else:
+                        soft_confidence = max(0.35, float(llm_candidate.confidence) * 0.75)
+                        softened = normalize_mapping_item(
+                            {
+                                "source_path": normalized_source,
+                                "target_path": llm_candidate.target_path,
+                                "mapping_type": llm_candidate.mapping_type.value,
+                                "transform": llm_candidate.transform.model_dump() if llm_candidate.transform else None,
+                                "confidence": soft_confidence,
+                                "rationale": f"{llm_candidate.rationale} (kept as soft-guided LLM candidate outside retrieval set)",
+                                "evidence": [*llm_candidate.evidence, "llm:outside_soft_guidance"],
+                            },
+                            source_standard,
+                            target_standard,
+                        )
+                        llm_by_source.setdefault(normalized_source, []).append(softened)
+                else:
+                    llm_by_source.setdefault(normalized_source, []).append(llm_candidate)
+            component_outputs["llm"] = {k: [m.model_dump() for m in v] for k, v in llm_by_source.items()}
+            rejected.extend([item.model_dump() for item in llm_report.rejected])
 
-        best_by_key: dict[tuple[str, str, str], Mapping] = {}
-        for mapping in mappings:
-            key = _mapping_key(mapping)
-            current = best_by_key.get(key)
-            if current is None or mapping.confidence > current.confidence:
-                best_by_key[key] = mapping
+        component_outputs["retrieval"] = {
+            source_node: [
+                {
+                    "id": item.id,
+                    "score": item.score,
+                    "candidate_path": item.payload.get("candidate_path"),
+                    "datatype": item.payload.get("datatype", ""),
+                    "unit": item.payload.get("unit", ""),
+                    "breakdown": item.payload.get("score_breakdown", {}),
+                }
+                for item in items
+            ]
+            for source_node, items in retrieval_by_source.items()
+        }
 
-        mappings = sorted(best_by_key.values(), key=_mapping_key)
+        preference_by_source: dict[str, dict[str, float]] = {}
+        decision_log: list[dict[str, Any]] = []
+        for node, source_path in zip(source_model.nodes, source_paths):
+            retrieval_items = retrieval_by_source.get(source_path, [])
+            top1 = float(retrieval_items[0].score) if retrieval_items else 0.0
+            top2 = float(retrieval_items[1].score) if len(retrieval_items) > 1 else 0.0
+            margin = max(0.0, top1 - top2)
+            source_label = str(node.label or node.id)
+            top_label = str(retrieval_items[0].payload.get("label") if retrieval_items else "")
+            lexical = _lexical_similarity(source_label, top_label)
+            deterministic_rule = any(m.mapping_type.value in {"label_match", "equivalent"} for m in rules_by_source.get(source_path, []))
+            rules_target = rules_by_source.get(source_path, [None])[0].target_path if rules_by_source.get(source_path) else ""
+            retrieval_target = str(retrieval_items[0].payload.get("candidate_path")) if retrieval_items else ""
+            rules_retrieval_agree = bool(rules_target and retrieval_target and rules_target == retrieval_target)
 
-        target_model = CanonicalModel(standard=target_standard, nodes=source_model.nodes, edges=source_model.edges)
+            retrieval_weight = 1.0 + (top1 * 0.8) + (margin * 0.3)
+            rules_weight = 1.0 + (0.7 if deterministic_rule else 0.0) + (0.4 if rules_retrieval_agree else 0.0)
+            llm_weight = 1.0 + (0.4 if not deterministic_rule else -0.1) + (0.2 if lexical < 0.55 else 0.0)
+            if mode in {"rag_only", "graph_only", "embedding_only"}:
+                rules_weight = 0.0
+                llm_weight = 0.0
+            if mode == "llm_only":
+                rules_weight = 0.0
+                retrieval_weight = 0.0
+            if mode == "rule_only":
+                retrieval_weight = 0.0
+                llm_weight = 0.0
+            preference_by_source[source_path] = {
+                "retrieval": max(0.0, retrieval_weight),
+                "rules": max(0.0, rules_weight),
+                "llm": max(0.0, llm_weight),
+            }
+            selected = max(preference_by_source[source_path], key=preference_by_source[source_path].get)
+            decision_log.append(
+                {
+                    "mode": mode,
+                    "source_path": source_path,
+                    "selected_strategy": selected,
+                    "signals": {
+                        "retrieval_top_score": top1,
+                        "retrieval_margin_top1_top2": margin,
+                        "lexical_similarity_top_candidate": lexical,
+                        "deterministic_rules_fired": deterministic_rule,
+                        "rules_retrieval_agree": rules_retrieval_agree,
+                    },
+                    "weights": preference_by_source[source_path],
+                }
+            )
+
+        final_mappings, merge_trace = _merge_per_source(
+            source_model=source_model,
+            source_paths=source_paths,
+            source_standard=source_standard,
+            target_standard=target_standard,
+            target_model=target_model,
+            retrieval_by_source=retrieval_by_source,
+            rules_by_source=rules_by_source,
+            llm_by_source=llm_by_source,
+            preference_by_source=preference_by_source,
+        )
+
+        # one-to-one contract in benchmark expects exactly one mapping per source node.
+        dedup: dict[str, Mapping] = {}
+        for m in final_mappings:
+            dedup[m.source_path] = m
+        mappings = [dedup[source_path] for source_path in source_paths if source_path in dedup]
+
         target_artifact = tgt.serialize(target_model, [m.model_dump() for m in mappings])
         validation = tgt.validate(target_artifact)
         component_outputs["merged"] = [m.model_dump() for m in mappings]
+
         metadata: dict[str, Any] = {
             "mode": mode,
             "rejected_mappings": rejected,
             "llm_raw_output": llm_raw_output,
             "decision_log": decision_log,
             "component_outputs": component_outputs,
-            "selected_strategy": selected_strategy if mode == "hybrid" else mode,
-            "signals": {"retrieval_top_score": retrieval_top_score, "schema_match_signal": schema_match_signal},
+            "selected_strategy": "hybrid_weighted_merge" if mode == "hybrid" else mode,
+            "signals": {"vector_retrieval_enabled": bool(config.enable_vector_retrieval)},
+            "merge_trace": merge_trace,
             "execution": {
-                "selected_strategy": selected_strategy if mode == "hybrid" else mode,
-                "rules_ran": rules_ran,
-                "retrieval_ran": bool(flags["retrieval"] and mode in {"hybrid", "rag_only", "graph_only"}),
-                "llm_ran": run_llm,
-                "candidate_snapping_ran": snapped_to_candidate,
-                "final_mapping_source": "llm" if run_llm and llm_mappings else ("rules" if rules_ran else ("retrieval" if selected_strategy == "retrieval" else "fallback")),
+                "selected_strategy": "hybrid_weighted_merge" if mode == "hybrid" else mode,
+                "rules_ran": flags["rules"],
+                "retrieval_ran": flags["retrieval"],
+                "llm_ran": flags["llm"],
+                "candidate_snapping_ran": False,
+                "final_mapping_source": "merged",
             },
         }
         if llm_error is not None:
             metadata["llm_error"] = llm_error
-        prov = Provenance(model_name=config.model_name, prompt_hash=stable_hash({"mode": mode, "source": source_standard, "target": target_standard}), seed=config.seed, git_commit=_git_commit(), adapter_versions={"source": "1.0", "target": "1.0"}, metadata=metadata)
+
+        prov = Provenance(
+            model_name=config.model_name,
+            prompt_hash=stable_hash({"mode": mode, "source": source_standard, "target": target_standard}),
+            seed=config.seed,
+            git_commit=_git_commit(),
+            adapter_versions={"source": "1.0", "target": "1.0"},
+            metadata=metadata,
+        )
         return TranslationResult(target_artifact=target_artifact, mappings=mappings, evidence=evidence, provenance=prov, validation_report=validation)

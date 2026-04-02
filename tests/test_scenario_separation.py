@@ -29,7 +29,7 @@ class _FakeRetriever:
                 kind="target_candidate",
                 text="aas://asset/submodel/default/element/temp/value",
                 score=0.99,
-                payload={"candidate_path": "aas://asset/submodel/default/element/temp/value"},
+                payload={"source_node": "opcua://ns=2;i=1", "candidate_path": "aas://asset/submodel/default/element/temp/value"},
             )
         ]
 
@@ -82,7 +82,11 @@ def test_scenarios_change_execution_path(monkeypatch):
         config=TranslatorConfig(component_flags={"retrieval": False}),
     )
 
-    assert full.provenance.metadata["selected_strategy"] == "retrieval"
-    assert full.mappings[0].target_path == "aas://asset/submodel/default/element/temp/value"
-    assert no_retrieval.provenance.metadata["selected_strategy"] in {"rules", "llm"}
-    assert no_retrieval.mappings[0].target_path != full.mappings[0].target_path
+    assert full.provenance.metadata["execution"]["retrieval_ran"] is True
+    assert full.provenance.metadata["execution"]["rules_ran"] is True
+    assert full.provenance.metadata["execution"]["llm_ran"] is True
+    assert no_retrieval.provenance.metadata["execution"]["retrieval_ran"] is False
+    full_retrieval = full.provenance.metadata["component_outputs"]["retrieval"]
+    no_retrieval_trace = no_retrieval.provenance.metadata["component_outputs"]["retrieval"]
+    assert bool(full_retrieval) is True
+    assert no_retrieval_trace == {}
