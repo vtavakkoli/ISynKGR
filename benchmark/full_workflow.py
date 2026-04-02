@@ -13,7 +13,7 @@ from benchmark.metrics import mean_std_ci
 from benchmark.report import write_report
 from benchmark.validate_dataset import validate_or_generate
 from isynkgr.icr.mapping_schema import ingest_mapping_payload
-from isynkgr.pipeline.hybrid import ADAPTERS
+from isynkgr.pipeline.adaptive_candidate_ranker import ADAPTERS
 
 SEEDS = [11, 23, 37]
 
@@ -159,7 +159,7 @@ def _run_variant(variant_name: str, pair_dir: Path, cfg_path: Path, logs_dir: Pa
             "DATASET_DIR": str(pair_dir.resolve()),
             "OUTPUT_DIR": str(out_dir.resolve()),
             "CONFIG_PATH": str(cfg_path.resolve()),
-            "SUT_MODE": "embedding_only" if variant_name == "embedding_similarity" else ("hybrid" if variant_name == "full_framework" or variant_name.startswith("ablation_") else variant_name),
+            "SUT_MODE": "embedding_only" if variant_name == "embedding_similarity" else ("adaptive_candidate_ranker" if variant_name == "full_framework" or variant_name.startswith("ablation_") else variant_name),
             "SEED": str(seed),
             "MAX_ITEMS": str(int(os.getenv("MAX_ITEMS", "100"))),
             "COMPONENT_FLAGS": json.dumps(COMPONENT_FLAGS.get(variant_name, {})),

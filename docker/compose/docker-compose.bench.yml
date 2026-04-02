@@ -1,4 +1,21 @@
 services:
+  adaptive_candidate_ranker:
+    build:
+      context: ../..
+      dockerfile: docker/sut/isynkgr_hybrid/Dockerfile
+    environment:
+      DATASET_DIR: ${DATASET_DIR:-/data/crosswalk}
+      OUTPUT_DIR: ${OUTPUT_DIR:-/out/adaptive_candidate_ranker}
+      CONFIG_PATH: ${CONFIG_PATH:-/config/config.json}
+      SUT_MODE: adaptive_candidate_ranker
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../datasets/v1:/data
+      - ../../results:/out
+      - ../../benchmark:/config
+
   isynkgr_hybrid:
     build:
       context: ../..
@@ -7,7 +24,7 @@ services:
       DATASET_DIR: ${DATASET_DIR:-/data/crosswalk}
       OUTPUT_DIR: ${OUTPUT_DIR:-/out/isynkgr_hybrid}
       CONFIG_PATH: ${CONFIG_PATH:-/config/config.json}
-      SUT_MODE: isynkgr_hybrid
+      SUT_MODE: hybrid
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - "host.docker.internal:host-gateway"

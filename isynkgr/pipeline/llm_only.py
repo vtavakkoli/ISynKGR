@@ -1,4 +1,4 @@
-from isynkgr.pipeline.hybrid import HybridPipeline, TranslatorConfig
+from isynkgr.pipeline.adaptive_candidate_ranker import HybridPipeline, TranslatorConfig
 
 
 def run(*args, **kwargs):

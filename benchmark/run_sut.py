@@ -8,7 +8,7 @@ from pathlib import Path
 
 from isynkgr.icr.mapping_output_contract import validate_mapping_item
 from isynkgr.icr.mapping_schema import MappingType, normalize_mapping_path
-from isynkgr.pipeline.hybrid import TranslatorConfig
+from isynkgr.pipeline.adaptive_candidate_ranker import TranslatorConfig
 from isynkgr.translator import Translator
 
 
@@ -152,7 +152,11 @@ def main() -> None:
     output_dir = Path(os.getenv("OUTPUT_DIR", "/out"))
     predictions_dir = output_dir / "predictions"
     config_path = Path(os.getenv("CONFIG_PATH", "/config/config.json"))
-    mode = os.getenv("SUT_MODE", "hybrid")
+    mode = os.getenv("SUT_MODE", "adaptive_candidate_ranker")
+    if mode == "isynkgr_hybrid":
+        mode = "hybrid"
+    if mode == "hybrid":
+        print("[DEPRECATION] SUT_MODE=hybrid is deprecated; use adaptive_candidate_ranker.", flush=True)
     source_protocol = os.getenv("SOURCE_PROTOCOL", "opcua")
     target_protocol = os.getenv("TARGET_PROTOCOL", "aas")
     max_samples = int(os.getenv("MAX_ITEMS", os.getenv("MAX_SAMPLES", "100")))
@@ -220,7 +224,7 @@ def main() -> None:
             row_source_protocol,
             row_target_protocol,
             str(sample_path),
-            mode=mode if mode != "isynkgr_hybrid" else "hybrid",
+            mode=mode,
             target_candidates=[expected_target] if (allow_gt_hints and expected_target) else None,
         )
         item_elapsed = time.perf_counter() - item_start
@@ -329,7 +333,7 @@ def main() -> None:
             }
         )
 
-        if mode in {"llm_only", "rag_only", "isynkgr_hybrid", "hybrid"}:
+        if mode in {"llm_only", "rag_only", "adaptive_candidate_ranker", "hybrid"}:
             log(
                 "[LLM-TRACE] "
                 f"sample={sample_path.name} expected_target={expected_target or '<none>'} "

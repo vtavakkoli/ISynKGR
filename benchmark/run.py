@@ -17,7 +17,7 @@ from isynkgr.icr.mapping_schema import ingest_mapping_payload
 
 SCENARIO_SETTINGS = {
     "baseline": {"mode": "rule_only", "component_flags": {}},
-    "full_framework": {"mode": "isynkgr_hybrid", "component_flags": {}},
+    "full_framework": {"mode": "adaptive_candidate_ranker", "component_flags": {}},
     "ablation_no_graphrag": {"mode": "llm_only", "component_flags": {}},
     "ablation_no_parallel": {"mode": "rag_only", "component_flags": {}},
     "ablation_no_community": {"mode": "graph_only", "component_flags": {}},
@@ -172,7 +172,7 @@ def run_scenario(args: argparse.Namespace) -> int:
     resolved_args["ollama_host"] = ollama_host
     (out_dir / "config_resolved.json").write_text(json.dumps(resolved_args, indent=2, sort_keys=True))
 
-    if mode in {"isynkgr_hybrid", "llm_only", "rag_only"}:
+    if mode in {"adaptive_candidate_ranker", "llm_only", "rag_only"}:
         timeout_s = int(os.getenv("OLLAMA_READY_TIMEOUT_S", "120"))
         ollama_host = wait_for_ollama(ollama_host, timeout_s=timeout_s)
 
