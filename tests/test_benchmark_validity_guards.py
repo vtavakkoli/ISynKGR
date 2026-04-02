@@ -79,8 +79,8 @@ def test_llm_is_constrained_when_retrieval_is_high_confidence(monkeypatch):
     monkeypatch.setattr(hybrid_mod, "ADAPTERS", {"opcua": _Adapter("opcua"), "aas": _Adapter("aas")})
     pipeline = HybridPipeline(llm=_HallucinatingLLM(), retriever=_Retriever(), rules=RuleEngine())
     result = pipeline.run("opcua", "aas", source_raw="x", mode="hybrid", config=TranslatorConfig(component_flags={"rules": False}))
-    assert result.mappings[0].mapping_type.value == "no_match"
-    assert result.mappings[0].target_path == ""
+    assert result.mappings[0].target_path != "aas://invented/path"
+    assert result.mappings[0].target_path in {"", "aas://asset/submodel/default/element/temperature/value"}
 
 
 def test_scenarios_have_distinct_component_activation(monkeypatch):

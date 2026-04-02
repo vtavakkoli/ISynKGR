@@ -13,6 +13,7 @@ from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.canonical.model import CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import EvidenceItem, Mapping, Provenance, TranslationResult
 from isynkgr.icr.mapping_output_contract import normalize_mapping_item, normalize_mapping_items
+from isynkgr.icr.entities import build_endpoint_path, normalize_path
 from isynkgr.llm.ollama import OllamaClient
 from isynkgr.pipeline.prompting import build_mapping_prompt
 from isynkgr.retrieval.graphrag import GraphRAGRetriever
@@ -101,10 +102,16 @@ def _build_default_target_model(target_standard: str) -> CanonicalModel:
     return CanonicalModel(standard=std, nodes=[CanonicalNode(id=f"{std}://candidate/default/value", type="Candidate", label="value", attributes={})], edges=[])
 
 
-def _group_evidence_by_source(evidence: list[EvidenceItem]) -> dict[str, list[EvidenceItem]]:
+def _canonical_source_path(source_standard: str, raw_path: str) -> str:
+    return normalize_path(raw_path if "://" in str(raw_path or "") else build_endpoint_path(source_standard, str(raw_path or "")))
+
+
+def _group_evidence_by_source(evidence: list[EvidenceItem], source_paths: list[str]) -> dict[str, list[EvidenceItem]]:
     grouped: dict[str, list[EvidenceItem]] = {}
     for item in evidence:
         source_node = str((item.payload or {}).get("source_node", "")).strip()
+        if not source_node and len(source_paths) == 1:
+            source_node = source_paths[0]
         if not source_node:
             continue
         grouped.setdefault(source_node, []).append(item)
@@ -137,6 +144,7 @@ def _target_compatibility(mapping: Mapping, target_model: CanonicalModel) -> flo
 
 def _merge_per_source(
     source_model: CanonicalModel,
+    source_paths: list[str],
     source_standard: str,
     target_standard: str,
     target_model: CanonicalModel,
@@ -148,8 +156,7 @@ def _merge_per_source(
     final: list[Mapping] = []
     trace: dict[str, Any] = {"alternatives": {}, "winning_reason": {}}
 
-    for node in source_model.nodes:
-        source_path = node.id
+    for _node, source_path in zip(source_model.nodes, source_paths):
         candidates: list[tuple[float, str, Mapping, str]] = []
 
         for m in rules_by_source.get(source_path, []):
@@ -262,6 +269,11 @@ class HybridPipeline:
         src = ADAPTERS[source_standard]
         tgt = ADAPTERS[target_standard]
         source_model = src.parse(source_raw)
+        source_paths = [_canonical_source_path(source_standard, node.id) for node in source_model.nodes]
+        def _resolve_source_key(candidate_source: str) -> str:
+            if candidate_source in source_paths:
+                return candidate_source
+            return source_paths[0] if len(source_paths) == 1 else candidate_source
         target_model = _build_default_target_model(target_standard)
 
         evidence: list[EvidenceItem] = []
@@ -275,18 +287,18 @@ class HybridPipeline:
             )
         if target_candidates:
             for candidate in target_candidates:
-                for src_node in source_model.nodes:
+                for source_path in source_paths:
                     evidence.append(
                         EvidenceItem(
-                            id=f"candidate:{src_node.id}:{candidate}",
+                            id=f"candidate:{source_path}:{candidate}",
                             kind="target_candidate",
                             text=candidate,
                             score=0.99,
-                            payload={"source_node": src_node.id, "candidate_path": candidate, "target_hint": candidate, "label": candidate.rsplit("/", 2)[-2]},
+                            payload={"source_node": source_path, "candidate_path": candidate, "target_hint": candidate, "label": candidate.rsplit("/", 2)[-2]},
                         )
                     )
 
-        retrieval_by_source = _group_evidence_by_source(evidence)
+        retrieval_by_source = _group_evidence_by_source(evidence, source_paths=source_paths)
         rules_by_source: dict[str, list[Mapping]] = {}
         llm_by_source: dict[str, list[Mapping]] = {}
         llm_raw_output: list[dict[str, Any]] = []
@@ -302,7 +314,14 @@ class HybridPipeline:
             )
             rule_report = normalize_mapping_items([m.model_dump() for m in rule_mappings], source_standard, target_standard, method="rule")
             for m in rule_report.accepted:
-                rules_by_source.setdefault(m.source_path, []).append(m)
+                normalized_source = _canonical_source_path(source_standard, m.source_path)
+                normalized_source = _resolve_source_key(normalized_source)
+                normalized_mapping = normalize_mapping_item(
+                    {**m.model_dump(), "source_path": normalized_source},
+                    source_standard,
+                    target_standard,
+                )
+                rules_by_source.setdefault(normalized_source, []).append(normalized_mapping)
             component_outputs["rule_engine"] = {k: [m.model_dump() for m in v] for k, v in rules_by_source.items()}
             rejected.extend([item.model_dump() for item in rule_report.rejected])
 
@@ -330,43 +349,74 @@ class HybridPipeline:
             llm_error = raw.get("_llm_error")
             llm_report = normalize_mapping_items(raw.get("mappings", []), source_standard, target_standard, method="llm")
             for m in llm_report.accepted:
-                source_candidates = _path_list_for_source(retrieval_by_source, m.source_path, target_standard)
-                if source_candidates and m.target_path not in source_candidates:
-                    top_score = retrieval_by_source.get(m.source_path, [EvidenceItem(id="", kind="", text="", score=0.0)])[0].score if retrieval_by_source.get(m.source_path) else 0.0
-                    constrained = bool(flags.get("strict_llm_on_high_confidence_retrieval", True) and top_score >= 0.85)
+                normalized_source = _canonical_source_path(source_standard, m.source_path)
+                normalized_source = _resolve_source_key(normalized_source)
+                source_candidates = _path_list_for_source(retrieval_by_source, normalized_source, target_standard)
+                top_score = retrieval_by_source.get(normalized_source, [EvidenceItem(id="", kind="", text="", score=0.0)])[0].score if retrieval_by_source.get(normalized_source) else 0.0
+                constrained = bool(flags.get("strict_llm_on_high_confidence_retrieval", True) and top_score >= 0.85 and mode != "llm_only")
+                llm_candidate = normalize_mapping_item(
+                    {**m.model_dump(), "source_path": normalized_source},
+                    source_standard,
+                    target_standard,
+                )
+                if source_candidates and llm_candidate.target_path not in source_candidates:
+                    snapped_target = ""
+                    if flags["postprocess_snap"] and not constrained:
+                        if len(source_candidates) == 1:
+                            snapped_target = source_candidates[0]
+                        else:
+                            scored = sorted(
+                                ((difflib.SequenceMatcher(a=llm_candidate.target_path, b=c).ratio(), c) for c in source_candidates),
+                                reverse=True,
+                            )
+                            if scored and scored[0][0] >= 0.72:
+                                snapped_target = scored[0][1]
+                    if snapped_target:
+                        llm_candidate = normalize_mapping_item(
+                            {
+                                **llm_candidate.model_dump(),
+                                "source_path": normalized_source,
+                                "target_path": snapped_target,
+                                "rationale": f"{llm_candidate.rationale} (snapped to retrieved candidate)",
+                                "evidence": [*llm_candidate.evidence, "llm:candidate_snap"],
+                            },
+                            source_standard,
+                            target_standard,
+                        )
+                if source_candidates and llm_candidate.target_path not in source_candidates:
                     if constrained:
                         replacement = normalize_mapping_item(
                             {
-                                "source_path": m.source_path,
+                                "source_path": normalized_source,
                                 "target_path": "",
                                 "mapping_type": "no_match",
                                 "transform": None,
-                                "confidence": min(float(m.confidence), 0.35),
+                                "confidence": min(float(llm_candidate.confidence), 0.35),
                                 "rationale": "LLM target rejected because high-confidence retrieval disagreed.",
-                                "evidence": [*m.evidence, "llm:outside_high_confidence_candidates"],
+                                "evidence": [*llm_candidate.evidence, "llm:outside_high_confidence_candidates"],
                             },
                             source_standard,
                             target_standard,
                         )
-                        llm_by_source.setdefault(m.source_path, []).append(replacement)
+                        llm_by_source.setdefault(normalized_source, []).append(replacement)
                     else:
-                        soft_confidence = max(0.35, float(m.confidence) * 0.75)
+                        soft_confidence = max(0.35, float(llm_candidate.confidence) * 0.75)
                         softened = normalize_mapping_item(
                             {
-                                "source_path": m.source_path,
-                                "target_path": m.target_path,
-                                "mapping_type": m.mapping_type.value,
-                                "transform": m.transform.model_dump() if m.transform else None,
+                                "source_path": normalized_source,
+                                "target_path": llm_candidate.target_path,
+                                "mapping_type": llm_candidate.mapping_type.value,
+                                "transform": llm_candidate.transform.model_dump() if llm_candidate.transform else None,
                                 "confidence": soft_confidence,
-                                "rationale": f"{m.rationale} (kept as soft-guided LLM candidate outside retrieval set)",
-                                "evidence": [*m.evidence, "llm:outside_soft_guidance"],
+                                "rationale": f"{llm_candidate.rationale} (kept as soft-guided LLM candidate outside retrieval set)",
+                                "evidence": [*llm_candidate.evidence, "llm:outside_soft_guidance"],
                             },
                             source_standard,
                             target_standard,
                         )
-                        llm_by_source.setdefault(m.source_path, []).append(softened)
+                        llm_by_source.setdefault(normalized_source, []).append(softened)
                 else:
-                    llm_by_source.setdefault(m.source_path, []).append(m)
+                    llm_by_source.setdefault(normalized_source, []).append(llm_candidate)
             component_outputs["llm"] = {k: [m.model_dump() for m in v] for k, v in llm_by_source.items()}
             rejected.extend([item.model_dump() for item in llm_report.rejected])
 
@@ -387,8 +437,7 @@ class HybridPipeline:
 
         preference_by_source: dict[str, dict[str, float]] = {}
         decision_log: list[dict[str, Any]] = []
-        for node in source_model.nodes:
-            source_path = node.id
+        for node, source_path in zip(source_model.nodes, source_paths):
             retrieval_items = retrieval_by_source.get(source_path, [])
             top1 = float(retrieval_items[0].score) if retrieval_items else 0.0
             top2 = float(retrieval_items[1].score) if len(retrieval_items) > 1 else 0.0
@@ -437,6 +486,7 @@ class HybridPipeline:
 
         final_mappings, merge_trace = _merge_per_source(
             source_model=source_model,
+            source_paths=source_paths,
             source_standard=source_standard,
             target_standard=target_standard,
             target_model=target_model,
@@ -450,7 +500,7 @@ class HybridPipeline:
         dedup: dict[str, Mapping] = {}
         for m in final_mappings:
             dedup[m.source_path] = m
-        mappings = [dedup[node.id] for node in source_model.nodes if node.id in dedup]
+        mappings = [dedup[source_path] for source_path in source_paths if source_path in dedup]
 
         target_artifact = tgt.serialize(target_model, [m.model_dump() for m in mappings])
         validation = tgt.validate(target_artifact)
