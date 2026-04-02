@@ -13,7 +13,6 @@ from isynkgr.adapters.opcua import OPCUAAdapter
 from isynkgr.canonical.model import CanonicalModel, CanonicalNode
 from isynkgr.canonical.schemas import EvidenceItem, Mapping, Provenance, TranslationResult
 from isynkgr.icr.mapping_output_contract import normalize_mapping_item, normalize_mapping_items
-from isynkgr.icr.path_validation import validate_protocol_path
 from isynkgr.llm.ollama import OllamaClient
 from isynkgr.pipeline.prompting import build_mapping_prompt
 from isynkgr.retrieval.graphrag import GraphRAGRetriever

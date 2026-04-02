@@ -126,7 +126,6 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         )
 
     ranked_f1 = sorted(canonical_rows, key=lambda r: r["f1"], reverse=True)
-    ranked_validity = sorted(canonical_rows, key=lambda r: r["validity_pass_rate"], reverse=True)
     aggregated_rows = _aggregate_rows(rows)
     violations = _aggregate_violations(canonical_rows)
     violation_rows = [
