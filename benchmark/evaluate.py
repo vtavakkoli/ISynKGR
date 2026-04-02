@@ -90,6 +90,12 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
     transform_correct = sum(1 for row in gt_rows if row.get("mapping_type") == "transform" and _mapping_key(row) in pred_keys)
     invalid_report_count = sum(1 for report in reports if not report.get("valid"))
     path_validity = 1.0 - (invalid_report_count / max(len(reports), 1))
+    semantic_invalid = sum(
+        1
+        for report in reports
+        if any(str(v.get("type", "")).startswith("semantic_") for v in report.get("violations", []))
+    )
+    semantic_validity = 1.0 - (semantic_invalid / max(len(reports), 1))
 
     confidence_pairs = []
     for row in pred_rows:
@@ -119,6 +125,7 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
         "f1": exact["exact_mapping_f1"],
         **exact,
         "path_validity_rate": max(0.0, path_validity),
+        "semantic_validity_rate": max(0.0, semantic_validity),
         "transform_correctness": transform_correct / transform_total if transform_total else 1.0,
         "retrieval_recall_at_1": recall_at_k(retrieval_rows, 1),
         "retrieval_recall_at_5": recall_at_k(retrieval_rows, 5),

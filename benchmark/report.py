@@ -59,6 +59,29 @@ def _scenario_name(row: dict) -> str:
     return f"{pair}::{scenario}" if pair else scenario
 
 
+def _aggregate_rows(rows: list[dict]) -> list[dict]:
+    buckets: dict[str, list[dict]] = {}
+    for row in rows:
+        buckets.setdefault(_scenario_name(row), []).append(row)
+    aggregated: list[dict] = []
+    for scenario, items in buckets.items():
+        f1_values = [float(i.get("f1", 0.0)) for i in items]
+        validity_values = [float(i.get("validity_pass_rate", 0.0)) for i in items]
+        aggregated.append(
+            {
+                "scenario": scenario,
+                "pair": scenario.split("::", 1)[0] if "::" in scenario else "aggregate",
+                "baseline": scenario.split("::", 1)[1] if "::" in scenario else scenario,
+                "runs": len(items),
+                "f1_mean": sum(f1_values) / max(len(f1_values), 1),
+                "f1_std": (sum((x - (sum(f1_values) / max(len(f1_values), 1))) ** 2 for x in f1_values) / max(len(f1_values), 1)) ** 0.5 if f1_values else 0.0,
+                "validity_mean": sum(validity_values) / max(len(validity_values), 1),
+                "validity_std": (sum((x - (sum(validity_values) / max(len(validity_values), 1))) ** 2 for x in validity_values) / max(len(validity_values), 1)) ** 0.5 if validity_values else 0.0,
+            }
+        )
+    return sorted(aggregated, key=lambda r: r["f1_mean"], reverse=True)
+
+
 def _metric(row: dict, key: str) -> float:
     return float(row.get(key, 0.0))
 
@@ -104,6 +127,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 
     ranked_f1 = sorted(canonical_rows, key=lambda r: r["f1"], reverse=True)
     ranked_validity = sorted(canonical_rows, key=lambda r: r["validity_pass_rate"], reverse=True)
+    aggregated_rows = _aggregate_rows(rows)
     violations = _aggregate_violations(canonical_rows)
     violation_rows = [
         {"violation_type": k, "count": v}
@@ -124,6 +148,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
     report_payload = {
         "canonical_metric_keys": list(CANONICAL_METRIC_KEYS),
         "summary_table": summary_rows,
+        "aggregated_scenario_summary": aggregated_rows,
         "why_validity_low": validity_breakdown,
         "top_violations": violation_rows,
         "scenarios": canonical_rows,
@@ -178,6 +203,23 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "## Main results",
         _markdown_table(summary_rows, ["pair", "scenario", "f1", "validity_pass_rate"]),
         "",
+        "## Aggregated per-scenario summary (mean/std across seeds)",
+        _markdown_table(
+            [
+                {
+                    "pair": r["pair"],
+                    "scenario": r["baseline"],
+                    "runs": r["runs"],
+                    "f1_mean": _fmt(r["f1_mean"]),
+                    "f1_std": _fmt(r["f1_std"]),
+                    "validity_mean": _fmt(r["validity_mean"]),
+                    "validity_std": _fmt(r["validity_std"]),
+                }
+                for r in aggregated_rows
+            ],
+            ["pair", "scenario", "runs", "f1_mean", "f1_std", "validity_mean", "validity_std"],
+        ),
+        "",
         "## Ablation study",
         "Ablation scenarios are those with names prefixed by `ablation_`.",
         "",
@@ -206,13 +248,13 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
     ]
     (run_dir / "report.md").write_text("\n".join(md))
 
-    names = [r["scenario"] for r in ranked_f1]
-    _bar_chart(plots_dir / "f1_by_scenario.png", names, [r["f1"] for r in ranked_f1], "F1 by Scenario", "f1")
+    names = [r["scenario"] for r in aggregated_rows]
+    _bar_chart(plots_dir / "f1_by_scenario.png", names, [r["f1_mean"] for r in aggregated_rows], "F1 by Scenario (mean)", "f1")
     _bar_chart(
         plots_dir / "validity_by_scenario.png",
-        [r["scenario"] for r in ranked_validity],
-        [r["validity_pass_rate"] for r in ranked_validity],
-        "Validity by Scenario",
+        [r["scenario"] for r in aggregated_rows],
+        [r["validity_mean"] for r in aggregated_rows],
+        "Validity by Scenario (mean)",
         "validity_pass_rate",
     )
     top_violation_rows = violation_rows[:10] if violation_rows else [{"violation_type": "none", "count": 0}]
@@ -225,22 +267,22 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
     )
     _bar_chart(
         plots_dir / "cost_vs_performance.png",
-        [r["scenario"] for r in ranked_f1],
-        [float(next((x.get("runtime_per_scenario_s", 0.0) for x in rows if _scenario_name(x) == r["scenario"]), 0.0)) for r in ranked_f1],
+        [r["scenario"] for r in aggregated_rows],
+        [float(sum(x.get("runtime_per_scenario_s", 0.0) for x in rows if _scenario_name(x) == r["scenario"]) / max(1, sum(1 for x in rows if _scenario_name(x) == r["scenario"]))) for r in aggregated_rows],
         "Runtime Cost by Scenario",
         "runtime_s",
     )
     _bar_chart(
         plots_dir / "latency_by_scenario.png",
-        [r["scenario"] for r in ranked_f1],
-        [float(next((x.get("latency_per_sample_s", 0.0) for x in rows if _scenario_name(x) == r["scenario"]), 0.0)) for r in ranked_f1],
+        [r["scenario"] for r in aggregated_rows],
+        [float(sum(x.get("latency_per_sample_s", 0.0) for x in rows if _scenario_name(x) == r["scenario"]) / max(1, sum(1 for x in rows if _scenario_name(x) == r["scenario"]))) for r in aggregated_rows],
         "Latency per Sample by Scenario",
         "seconds",
     )
     _bar_chart(
         plots_dir / "retrieval_recall_by_scenario.png",
-        [r["scenario"] for r in ranked_f1],
-        [float(next((x.get("retrieval_recall_at_5", 0.0) for x in rows if _scenario_name(x) == r["scenario"]), 0.0)) for r in ranked_f1],
+        [r["scenario"] for r in aggregated_rows],
+        [float(sum(x.get("retrieval_recall_at_5", 0.0) for x in rows if _scenario_name(x) == r["scenario"]) / max(1, sum(1 for x in rows if _scenario_name(x) == r["scenario"]))) for r in aggregated_rows],
         "Retrieval Recall@5 by Scenario",
         "recall@5",
     )

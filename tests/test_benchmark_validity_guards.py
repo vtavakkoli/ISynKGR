@@ -73,12 +73,12 @@ def test_rule_shortcut_can_be_disabled_in_benchmark_mode():
     assert mappings[0].target_path == ""
 
 
-def test_llm_is_constrained_to_candidate_list(monkeypatch):
+def test_llm_is_constrained_when_retrieval_is_high_confidence(monkeypatch):
     from isynkgr.pipeline import hybrid as hybrid_mod
 
     monkeypatch.setattr(hybrid_mod, "ADAPTERS", {"opcua": _Adapter("opcua"), "aas": _Adapter("aas")})
     pipeline = HybridPipeline(llm=_HallucinatingLLM(), retriever=_Retriever(), rules=RuleEngine())
-    result = pipeline.run("opcua", "aas", source_raw="x", mode="llm_only", config=TranslatorConfig())
+    result = pipeline.run("opcua", "aas", source_raw="x", mode="hybrid", config=TranslatorConfig(component_flags={"rules": False}))
     assert result.mappings[0].mapping_type.value == "no_match"
     assert result.mappings[0].target_path == ""
 
