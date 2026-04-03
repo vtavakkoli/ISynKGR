@@ -6,10 +6,10 @@ from pathlib import Path
 
 from benchmark.evaluate import evaluate_run
 from benchmark.report import write_report
-from isynkgr.pipeline.hybrid import TranslatorConfig
+from isynkgr.pipeline.adaptive_candidate_ranker import TranslatorConfig
 from isynkgr.translator import Translator
 
-BASELINES = ["rule_only", "graph_only", "isynkgr_hybrid", "rag_only", "llm_only"]
+BASELINES = ["rule_only", "graph_only", "adaptive_candidate_ranker", "rag_only", "llm_only"]
 
 
 def _load_gt_subset(limit: int) -> list[dict]:
@@ -25,7 +25,7 @@ def _run_local_baseline(mode: str, out_dir: Path) -> None:
     opc_files = sorted(Path("datasets/v1/opcua/synthetic").glob("*.xml"))[:10]
     for f in opc_files:
         idx = int(f.stem.split("_")[-1])
-        result = translator.translate("opcua", "aas", str(f), mode=mode if mode != "isynkgr_hybrid" else "hybrid")
+        result = translator.translate("opcua", "aas", str(f), mode=mode if mode != "adaptive_candidate_ranker" else "adaptive_candidate_ranker")
         for m in result.mappings:
             mapping_lines.append(json.dumps(m.model_dump()))
         if not result.mappings:

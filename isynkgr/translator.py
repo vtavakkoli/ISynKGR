@@ -5,7 +5,7 @@ from typing import Literal
 
 from isynkgr.canonical.schemas import TranslationResult
 from isynkgr.llm.ollama import OllamaClient
-from isynkgr.pipeline.hybrid import HybridPipeline, TranslatorConfig
+from isynkgr.pipeline.adaptive_candidate_ranker import AdaptiveCandidateRankerPipeline, TranslatorConfig
 from isynkgr.retrieval.graphrag import GraphRAGRetriever
 from isynkgr.rules.engine import RuleEngine
 
@@ -13,14 +13,14 @@ from isynkgr.rules.engine import RuleEngine
 class Translator:
     def __init__(self, config: TranslatorConfig | None = None) -> None:
         self.config = config or TranslatorConfig()
-        self.pipeline = HybridPipeline(llm=OllamaClient(model=self.config.model_name), retriever=GraphRAGRetriever(), rules=RuleEngine())
+        self.pipeline = AdaptiveCandidateRankerPipeline(llm=OllamaClient(model=self.config.model_name), retriever=GraphRAGRetriever(), rules=RuleEngine())
 
     def translate(
         self,
         source_standard: str,
         target_standard: str,
         source_artifact_path: str | bytes | dict,
-        mode: Literal["hybrid", "llm_only", "rag_only", "rule_only", "graph_only", "embedding_only"] = "hybrid",
+        mode: Literal["adaptive_candidate_ranker", "hybrid", "llm_only", "rag_only", "rule_only", "graph_only", "embedding_only"] = "adaptive_candidate_ranker",
         config: TranslatorConfig | None = None,
         target_candidates: list[str] | None = None,
     ) -> TranslationResult:

@@ -13,7 +13,7 @@ from benchmark.metrics import mean_std_ci
 from benchmark.report import write_report
 from benchmark.validate_dataset import validate_or_generate
 from isynkgr.icr.mapping_schema import ingest_mapping_payload
-from isynkgr.pipeline.hybrid import ADAPTERS
+from isynkgr.pipeline.adaptive_candidate_ranker import ADAPTERS
 
 SEEDS = [11, 23, 37]
 
@@ -153,13 +153,16 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
 def _run_variant(variant_name: str, pair_dir: Path, cfg_path: Path, logs_dir: Path, seed: int, source_standard: str, target_standard: str) -> tuple[dict, float]:
     out_dir = pair_dir / "results" / variant_name / f"seed{seed}"
     out_dir.mkdir(parents=True, exist_ok=True)
+    gt_src = pair_dir / "ground_truth.jsonl"
+    if gt_src.exists():
+        (out_dir / "ground_truth.jsonl").write_text(gt_src.read_text())
     env = os.environ.copy()
     env.update(
         {
             "DATASET_DIR": str(pair_dir.resolve()),
             "OUTPUT_DIR": str(out_dir.resolve()),
             "CONFIG_PATH": str(cfg_path.resolve()),
-            "SUT_MODE": "embedding_only" if variant_name == "embedding_similarity" else ("hybrid" if variant_name == "full_framework" or variant_name.startswith("ablation_") else variant_name),
+            "SUT_MODE": "embedding_only" if variant_name == "embedding_similarity" else ("adaptive_candidate_ranker" if variant_name == "full_framework" or variant_name.startswith("ablation_") else variant_name),
             "SEED": str(seed),
             "MAX_ITEMS": str(int(os.getenv("MAX_ITEMS", "100"))),
             "COMPONENT_FLAGS": json.dumps(COMPONENT_FLAGS.get(variant_name, {})),
@@ -221,7 +224,8 @@ def _write_error_tables(artifacts_dir: Path, rows: list[dict]) -> None:
         for row in rows:
             source, target = row["pair"].split("->", 1)
             pred_dir = artifacts_dir / "pairs" / _pair_key(source, target) / "results" / row["baseline"] / f"seed{row['seed']}"
-            analysis = json.loads((pred_dir / "error_analysis.json").read_text())
+            analysis_path = pred_dir / "error_analysis.json"
+            analysis = json.loads(analysis_path.read_text()) if analysis_path.exists() else {}
             reasons = analysis.get("validation_reasons", {})
             writer.writerow(
                 {

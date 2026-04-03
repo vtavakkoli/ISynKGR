@@ -11,7 +11,7 @@ from benchmark.evaluate import evaluate_run
 from benchmark.report import write_report
 from benchmark.validate_dataset import validate_or_generate
 
-BASELINES = ["isynkgr_hybrid", "llm_only", "rag_only", "rule_only", "graph_only"]
+BASELINES = ["adaptive_candidate_ranker", "llm_only", "rag_only", "rule_only", "graph_only"]
 
 
 def run_benchmark(compose_file: str = "docker/compose/docker-compose.bench.yml", dataset_dir: str = "datasets/v1/crosswalk", full: bool = False) -> Path:
@@ -28,7 +28,7 @@ def run_benchmark(compose_file: str = "docker/compose/docker-compose.bench.yml",
     if gt_src.exists():
         (run_dir / "ground_truth.jsonl").write_text(gt_src.read_text())
 
-    modes = BASELINES if full else ["rule_only", "graph_only", "isynkgr_hybrid"]
+    modes = BASELINES if full else ["rule_only", "graph_only", "adaptive_candidate_ranker"]
     total = len(modes)
     rows = []
 
