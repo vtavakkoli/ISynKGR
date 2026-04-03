@@ -103,6 +103,40 @@ def _build_default_target_model(target_standard: str) -> CanonicalModel:
     return CanonicalModel(standard=std, nodes=[CanonicalNode(id=f"{std}://candidate/default/value", type="Candidate", label="value", attributes={})], edges=[])
 
 
+def _guess_label_from_path(path: str) -> str:
+    raw = str(path or "").strip().rstrip("/")
+    if not raw:
+        return "candidate"
+    tail = raw.split("/")[-1]
+    if tail.lower() in {"value", "asset"} and len(raw.split("/")) >= 2:
+        tail = raw.split("/")[-2]
+    return tail or "candidate"
+
+
+def _build_target_model_from_candidates(target_standard: str, target_candidates: list[str]) -> CanonicalModel:
+    std = target_standard.lower()
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for candidate in target_candidates:
+        norm = normalize_path(str(candidate or "").strip())
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        cleaned.append(norm)
+    if not cleaned:
+        return _build_default_target_model(target_standard)
+    nodes = [
+        CanonicalNode(
+            id=path,
+            type="Candidate",
+            label=_guess_label_from_path(path),
+            attributes={},
+        )
+        for path in cleaned
+    ]
+    return CanonicalModel(standard=std, nodes=nodes, edges=[])
+
+
 def _canonical_source_path(source_standard: str, raw_path: str) -> str:
     return normalize_path(raw_path if "://" in str(raw_path or "") else build_endpoint_path(source_standard, str(raw_path or "")))
 
@@ -183,7 +217,7 @@ class AdaptiveCandidateRankerPipeline:
         source_model = src.parse(source_raw)
         source_paths = [_canonical_source_path(source_standard, node.id) for node in source_model.nodes]
         source_index = {path: node for path, node in zip(source_paths, source_model.nodes)}
-        target_model = _build_default_target_model(target_standard)
+        target_model = _build_target_model_from_candidates(target_standard, target_candidates or [])
         target_index = {node.id: node for node in target_model.nodes}
         source_parent = _parent_map(source_model)
         target_parent = _parent_map(target_model)
@@ -394,11 +428,13 @@ class AdaptiveCandidateRankerPipeline:
                     llm_by_source[source_path].append(normalized)
                     if normalized.mapping_type != MappingType.NO_MATCH:
                         state = candidates_by_source[source_path].get(normalized.target_path)
+                        llm_conf = float(normalized.confidence)
                         if state is None:
-                            candidates_by_source[source_path][normalized.target_path] = CandidateState(mapping=normalized, total_score=float(normalized.confidence) * 0.7, score_breakdown={"llm_confidence": float(normalized.confidence)}, support={"llm"}, rejected_reasons=[])
+                            candidates_by_source[source_path][normalized.target_path] = CandidateState(mapping=normalized, total_score=llm_conf, score_breakdown={"llm_confidence": llm_conf}, support={"llm"}, rejected_reasons=[])
                         else:
                             state.support.add("llm")
-                            state.total_score = min(1.0, state.total_score + 0.06)
+                            state.score_breakdown["llm_confidence"] = llm_conf
+                            state.total_score = min(1.0, max(state.total_score + 0.06, llm_conf))
                 llm_invocation_log.append({"source_path": source_path, "invoked": True, "reason": "uncertain_or_disagreement", "top1": top1, "top2": top2, "rules_retrieval_disagree": disagreement})
             else:
                 llm_invocation_log.append({"source_path": source_path, "invoked": False, "reason": "high_confidence_non_ambiguous", "top1": top1, "top2": top2, "rules_retrieval_disagree": disagreement})
