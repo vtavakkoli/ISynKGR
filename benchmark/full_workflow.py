@@ -153,6 +153,9 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
 def _run_variant(variant_name: str, pair_dir: Path, cfg_path: Path, logs_dir: Path, seed: int, source_standard: str, target_standard: str) -> tuple[dict, float]:
     out_dir = pair_dir / "results" / variant_name / f"seed{seed}"
     out_dir.mkdir(parents=True, exist_ok=True)
+    gt_src = pair_dir / "ground_truth.jsonl"
+    if gt_src.exists():
+        (out_dir / "ground_truth.jsonl").write_text(gt_src.read_text())
     env = os.environ.copy()
     env.update(
         {
@@ -221,7 +224,8 @@ def _write_error_tables(artifacts_dir: Path, rows: list[dict]) -> None:
         for row in rows:
             source, target = row["pair"].split("->", 1)
             pred_dir = artifacts_dir / "pairs" / _pair_key(source, target) / "results" / row["baseline"] / f"seed{row['seed']}"
-            analysis = json.loads((pred_dir / "error_analysis.json").read_text())
+            analysis_path = pred_dir / "error_analysis.json"
+            analysis = json.loads(analysis_path.read_text()) if analysis_path.exists() else {}
             reasons = analysis.get("validation_reasons", {})
             writer.writerow(
                 {

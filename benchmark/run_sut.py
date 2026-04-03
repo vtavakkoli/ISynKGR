@@ -414,6 +414,8 @@ def main() -> None:
         "validation_invalid_count": sum(1 for v in validations if not v.get("valid")),
     }
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+    predictions_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "mappings.jsonl").write_text("\n".join(mapping_lines) + ("\n" if mapping_lines else ""))
     (output_dir / "validation.json").write_text(json.dumps(validations, indent=2))
     (output_dir / "provenance.json").write_text(json.dumps({"mode": mode, "dataset": str(dataset_dir), "llm_bug_count": len(llm_bugs)}, indent=2))

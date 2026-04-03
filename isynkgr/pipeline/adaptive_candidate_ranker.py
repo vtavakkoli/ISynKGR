@@ -187,6 +187,8 @@ class AdaptiveCandidateRankerPipeline:
         target_index = {node.id: node for node in target_model.nodes}
         source_parent = _parent_map(source_model)
         target_parent = _parent_map(target_model)
+        allowed_external_targets = set(target_candidates or [])
+        strict_target_existence = resolved_mode in {"adaptive_candidate_ranker", "rule_only", "hybrid"}
 
         evidence: list[EvidenceItem] = []
         retrieval_by_source: dict[str, list[EvidenceItem]] = {p: [] for p in source_paths}
@@ -200,6 +202,8 @@ class AdaptiveCandidateRankerPipeline:
             )
             for ev in evidence:
                 source_node = str((ev.payload or {}).get("source_node", "")).strip()
+                if not source_node and len(source_paths) == 1:
+                    source_node = source_paths[0]
                 if source_node in retrieval_by_source:
                     retrieval_by_source[source_node].append(ev)
             for source_node in retrieval_by_source:
@@ -354,8 +358,39 @@ class AdaptiveCandidateRankerPipeline:
                         normalized = normalize_mapping_item(item, source_standard, target_standard)
                     except Exception:
                         continue
-                    if _canonical_source_path(source_standard, normalized.source_path) != source_path:
-                        continue
+                    normalized_source = _canonical_source_path(source_standard, normalized.source_path)
+                    if normalized_source != source_path:
+                        if len(source_paths) == 1:
+                            normalized = normalize_mapping_item(
+                                {**normalized.model_dump(), "source_path": source_path},
+                                source_standard,
+                                target_standard,
+                            )
+                        else:
+                            continue
+                    source_candidates = [str(i.payload.get("candidate_path", "")).strip() for i in retrieval_by_source.get(source_path, []) if str(i.payload.get("candidate_path", "")).strip()]
+                    if source_candidates and normalized.target_path not in source_candidates:
+                        snapped_target = ""
+                        if len(source_candidates) == 1:
+                            snapped_target = source_candidates[0]
+                        else:
+                            scored = sorted(
+                                ((_lexical_similarity(normalized.target_path, c), c) for c in source_candidates),
+                                reverse=True,
+                            )
+                            if scored and scored[0][0] >= 0.72:
+                                snapped_target = scored[0][1]
+                        if snapped_target:
+                            normalized = normalize_mapping_item(
+                                {
+                                    **normalized.model_dump(),
+                                    "target_path": snapped_target,
+                                    "rationale": f"{normalized.rationale} (snapped to retrieved candidate)",
+                                    "evidence": [*normalized.evidence, "llm:candidate_snap"],
+                                },
+                                source_standard,
+                                target_standard,
+                            )
                     llm_by_source[source_path].append(normalized)
                     if normalized.mapping_type != MappingType.NO_MATCH:
                         state = candidates_by_source[source_path].get(normalized.target_path)
@@ -404,16 +439,17 @@ class AdaptiveCandidateRankerPipeline:
                     MappingType.LABEL_MATCH,
                 }:
                     continue
-                if mapping.target_path not in target_index:
+                if strict_target_existence and mapping.target_path not in target_index and mapping.target_path not in allowed_external_targets:
                     continue
-                src_dtype = _guess_dtype(source_index[source_path])
-                tgt_dtype = _guess_dtype(target_index[mapping.target_path])
-                if src_dtype and tgt_dtype and src_dtype != tgt_dtype:
-                    continue
-                src_unit = _guess_unit(source_index[source_path])
-                tgt_unit = _guess_unit(target_index[mapping.target_path])
-                if src_unit and tgt_unit and src_unit != tgt_unit:
-                    continue
+                if mapping.target_path in target_index:
+                    src_dtype = _guess_dtype(source_index[source_path])
+                    tgt_dtype = _guess_dtype(target_index[mapping.target_path])
+                    if src_dtype and tgt_dtype and src_dtype != tgt_dtype:
+                        continue
+                    src_unit = _guess_unit(source_index[source_path])
+                    tgt_unit = _guess_unit(target_index[mapping.target_path])
+                    if src_unit and tgt_unit and src_unit != tgt_unit:
+                        continue
                 if mapping.target_path in used_targets:
                     continue
                 winner = normalize_mapping_item(
@@ -458,7 +494,7 @@ class AdaptiveCandidateRankerPipeline:
             "deprecation_warning": "mode='hybrid' is deprecated; use mode='adaptive_candidate_ranker'." if mode == "hybrid" else "",
             "llm_raw_output": llm_raw_output,
             "component_outputs": {
-                "retrieval": {
+                "retrieval": ({
                     source_node: [
                         {
                             "id": item.id,
@@ -471,7 +507,7 @@ class AdaptiveCandidateRankerPipeline:
                         for item in items
                     ]
                     for source_node, items in retrieval_by_source.items()
-                },
+                } if (flags["retrieval"] or target_candidates) else {}),
                 "rules": {k: [m.model_dump() for m in v] for k, v in rules_by_source.items()},
                 "rule_engine": {k: [m.model_dump() for m in v] for k, v in rules_by_source.items()},
                 "llm": {k: [m.model_dump() for m in v] for k, v in llm_by_source.items()},
