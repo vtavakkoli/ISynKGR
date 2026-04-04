@@ -91,9 +91,9 @@ def _synthetic_id_for_standard(standard: str, idx: int, default: str) -> str:
     if s == "OPCUA":
         return f"opcua://ns=2;s={signal.capitalize()}{idx}"
     if s == "AAS":
-        return f"aas://asset/telemetry/submodel/process/element/{signal}/value"
+        return f"aas://asset-{idx}/submodel/process/element/{signal}/value"
     if s == "IEEE1451":
-        return f"ieee1451://teds{idx}/ch{idx % 4}/{signal}/value"
+        return f"ieee1451://teds{idx}/ch{idx % 4}/{signal}_value"
     if s == "IEC61499":
         return f"iec61499://Device{idx}/Res1/FB1/{signal.upper()}_OUT"
     if s == "ISO15926":
