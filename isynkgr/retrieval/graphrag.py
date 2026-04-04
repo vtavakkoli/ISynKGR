@@ -22,6 +22,15 @@ def _norm(text: str) -> str:
     return str(text or "").strip().lower().replace("_", " ")
 
 
+def _generic_label_penalty(label: str) -> float:
+    lowered = _norm(label)
+    if lowered in {"value", "measurement", "variable", "candidate"}:
+        return 0.18
+    if lowered.startswith("value "):
+        return 0.15
+    return 0.0
+
+
 def _guess_datatype(node: CanonicalNode) -> str:
     attrs = node.attributes or {}
     metadata = attrs.get("metadata", {}) if isinstance(attrs.get("metadata", {}), dict) else {}
@@ -100,7 +109,8 @@ class GraphRAGRetriever:
                 dtype_match = 1.0 if src_dtype and candidate.datatype and src_dtype == candidate.datatype else (0.4 if not src_dtype or not candidate.datatype else 0.0)
                 unit_match = 1.0 if src_unit and candidate.unit and src_unit.lower() == candidate.unit.lower() else (0.5 if not src_unit or not candidate.unit else 0.0)
                 context_hint = 1.0 if candidate.parent and _norm(candidate.parent).split("/")[-1] in src_label else 0.0
-                score = min(1.0, (lexical * 0.55) + (dtype_match * 0.2) + (unit_match * 0.15) + (context_hint * 0.1) + vector_boost)
+                penalty = _generic_label_penalty(candidate.label)
+                score = min(1.0, max(0.0, (lexical * 0.55) + (dtype_match * 0.2) + (unit_match * 0.15) + (context_hint * 0.1) + vector_boost - penalty))
                 breakdown = {
                     "lexical": lexical,
                     "label_similarity": label_similarity,
@@ -109,6 +119,7 @@ class GraphRAGRetriever:
                     "unit_match": unit_match,
                     "context_hint": context_hint,
                     "vector_boost": vector_boost,
+                    "generic_label_penalty": penalty,
                 }
                 ranked.append((score, candidate, breakdown))
 

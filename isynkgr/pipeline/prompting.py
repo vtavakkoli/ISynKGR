@@ -7,6 +7,16 @@ from isynkgr.canonical.model import CanonicalModel
 from isynkgr.canonical.schemas import EvidenceItem
 
 
+def _node_attr(node: Any, *keys: str) -> str:
+    attrs = getattr(node, "attributes", {}) or {}
+    metadata = attrs.get("metadata", {}) if isinstance(attrs.get("metadata", {}), dict) else {}
+    for key in keys:
+        value = attrs.get(key) or metadata.get(key)
+        if value:
+            return str(value)
+    return ""
+
+
 def _node_summary(model: CanonicalModel, max_items: int = 30) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for node in model.nodes[:max_items]:
@@ -15,9 +25,9 @@ def _node_summary(model: CanonicalModel, max_items: int = 30) -> list[dict[str, 
                 "id": node.id,
                 "path": node.id,
                 "name": node.label,
-                "datatype": node.attributes.get("datatype"),
-                "unit": node.attributes.get("unit"),
-                "description": node.attributes.get("description"),
+                "datatype": _node_attr(node, "datatype", "dtype", "valueType", "dataType", "type"),
+                "unit": _node_attr(node, "unit"),
+                "description": node.attributes.get("description") or _node_attr(node, "DisplayName"),
             }
         )
     return rows
@@ -35,7 +45,18 @@ def _target_summary(evidence: list[EvidenceItem], target_protocol: str, max_item
             if candidate_path in seen:
                 continue
             seen.add(candidate_path)
-            exact.append({"path": candidate_path, "name": item.text, "description": item.kind, "exact_candidate": True})
+            exact.append(
+                {
+                    "path": candidate_path,
+                    "name": item.text,
+                    "description": item.kind,
+                    "datatype": payload.get("datatype", ""),
+                    "unit": payload.get("unit", ""),
+                    "parent": payload.get("parent", ""),
+                    "retrieval_score": item.score,
+                    "exact_candidate": True,
+                }
+            )
             continue
         path = str(item.id)
         if path in seen:
@@ -92,6 +113,8 @@ def build_mapping_prompt(
         "6) Choose target_path exactly from TARGET_VARIABLES when possible.\n"
         "7) Do not invent a new target_path when an exact TARGET_VARIABLES candidate applies.\n"
         "8) Prefer one high-confidence mapping per source variable when possible.\n"
+        "9) Prefer semantic matches: variable meaning first, then datatype/unit/context compatibility.\n"
+        "10) Avoid arbitrary index-based choices when candidates are generic; choose no_match if evidence is insufficient.\n"
         "Input context:\n"
         f"{json.dumps(payload, ensure_ascii=False)}"
     )
