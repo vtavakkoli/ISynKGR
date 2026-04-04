@@ -113,6 +113,40 @@ def _guess_label_from_path(path: str) -> str:
     return tail or "candidate"
 
 
+def _semantic_hint_from_path(path: str) -> dict[str, str]:
+    raw = str(path or "").strip().rstrip("/")
+    tokens = [t for t in raw.split("/") if t]
+    lowered = [t.lower() for t in tokens]
+    signal = ""
+    for token in reversed(tokens):
+        lt = token.lower()
+        if lt in {"value", "values", "measurement"}:
+            continue
+        if lt.startswith("value_"):
+            continue
+        signal = token
+        break
+    if not signal and tokens:
+        signal = tokens[-1]
+    unit = ""
+    datatype = ""
+    if any(k in lowered for k in {"temperature", "temp"}):
+        unit = "C"
+        datatype = "FLOAT"
+    elif "pressure" in lowered:
+        unit = "bar"
+        datatype = "FLOAT"
+    elif "flow" in lowered:
+        unit = "l/s"
+        datatype = "FLOAT"
+    elif "speed" in lowered:
+        unit = "rpm"
+        datatype = "FLOAT"
+    elif "state" in lowered or "status" in lowered:
+        datatype = "STRING"
+    return {"label": signal or "candidate", "unit": unit, "datatype": datatype}
+
+
 def _build_target_model_from_candidates(target_standard: str, target_candidates: list[str]) -> CanonicalModel:
     std = target_standard.lower()
     cleaned: list[str] = []
@@ -125,15 +159,21 @@ def _build_target_model_from_candidates(target_standard: str, target_candidates:
         cleaned.append(norm)
     if not cleaned:
         return _build_default_target_model(target_standard)
-    nodes = [
-        CanonicalNode(
-            id=path,
-            type="Candidate",
-            label=_guess_label_from_path(path),
-            attributes={},
+    nodes: list[CanonicalNode] = []
+    for path in cleaned:
+        hints = _semantic_hint_from_path(path)
+        nodes.append(
+            CanonicalNode(
+                id=path,
+                type="Candidate",
+                label=hints["label"] or _guess_label_from_path(path),
+                attributes={
+                    "datatype": hints["datatype"],
+                    "unit": hints["unit"],
+                    "description": f"candidate derived from path {path}",
+                },
+            )
         )
-        for path in cleaned
-    ]
     return CanonicalModel(standard=std, nodes=nodes, edges=[])
 
 
@@ -198,7 +238,7 @@ class AdaptiveCandidateRankerPipeline:
             "rules": True,
             "retrieval": True,
             "llm": True,
-            "allow_synthetic_benchmark_shortcuts": True,
+            "allow_synthetic_benchmark_shortcuts": False,
             "uncertainty_threshold": 0.72,
             "ambiguity_margin": 0.06,
             "max_candidates_per_source": 5,
@@ -243,15 +283,24 @@ class AdaptiveCandidateRankerPipeline:
             for source_node in retrieval_by_source:
                 retrieval_by_source[source_node] = sorted(retrieval_by_source[source_node], key=lambda x: float(x.score), reverse=True)
 
-        if target_candidates:
+        if target_candidates and not flags["retrieval"]:
             for source_path in source_paths:
                 for candidate in target_candidates:
+                    hints = _semantic_hint_from_path(candidate)
                     item = EvidenceItem(
                         id=f"candidate:{source_path}:{candidate}",
                         kind="target_candidate",
-                        text=candidate,
-                        score=0.99,
-                        payload={"source_node": source_path, "candidate_path": candidate, "target_hint": candidate, "label": candidate.rsplit("/", 2)[-2]},
+                        text=hints["label"] or candidate,
+                        score=0.35,
+                        payload={
+                            "source_node": source_path,
+                            "candidate_path": candidate,
+                            "target_hint": candidate,
+                            "label": hints["label"] or candidate.rsplit("/", 2)[-2],
+                            "datatype": hints["datatype"],
+                            "unit": hints["unit"],
+                            "score_breakdown": {"fallback_injected": 1.0},
+                        },
                     )
                     retrieval_by_source[source_path].append(item)
                     evidence.append(item)
