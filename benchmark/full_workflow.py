@@ -108,17 +108,22 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
     gt_src = Path("datasets/v1/crosswalk/gt_mappings.jsonl")
     rows: list[dict] = []
     gt_rows: list[dict] = []
+    target_universe: list[str] = []
+    seen_targets: set[str] = set()
     tiers = ["synthetic", "noisy", "realistic"]
     difficulties = ["easy", "medium", "hard"]
 
     for i, line in enumerate(gt_src.read_text().splitlines()):
-        if i >= max_rows:
-            break
         if not line.strip():
             continue
         rec = ingest_mapping_payload(json.loads(line), migrate_legacy=True).model_dump()
         source_id = _synthetic_id_for_standard(source_standard, i, rec["source_path"])
         target_id = _synthetic_id_for_standard(target_standard, i, rec["target_path"])
+        if target_id and target_id not in seen_targets:
+            seen_targets.add(target_id)
+            target_universe.append(target_id)
+        if i >= max_rows:
+            continue
         is_no_match = i % 11 == 0
         if is_no_match:
             target_id = ""
@@ -147,6 +152,9 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
 
     (pair_dir / "dataset.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     (pair_dir / "ground_truth.jsonl").write_text("\n".join(json.dumps(r) for r in gt_rows) + "\n")
+    (pair_dir / "target_candidates.jsonl").write_text(
+        "\n".join(json.dumps({"target_path": target}) for target in target_universe) + ("\n" if target_universe else "")
+    )
     return pair_dir
 
 

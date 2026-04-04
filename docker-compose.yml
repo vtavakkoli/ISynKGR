@@ -35,7 +35,7 @@ services:
       OLLAMA_READY_TIMEOUT_S: ${OLLAMA_READY_TIMEOUT_S:-180}
       MODEL_NAME: ${MODEL_NAME:-qwen3.5:0.8b}
       SEED: ${SEED:-42}
-      MAX_ITEMS: ${MAX_ITEMS:-100}
+      MAX_ITEMS: ${MAX_ITEMS:-2}
       TIER: ${TIER:-canonical}
     extra_hosts:
       - "host.docker.internal:host-gateway"

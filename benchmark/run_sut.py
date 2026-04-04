@@ -33,6 +33,39 @@ def _read_dataset(dataset_dir: Path, max_samples: int) -> list[dict]:
     return [{"id": f.stem, "source_path": str(f)} for i, f in enumerate(opc_files)]
 
 
+def _load_target_universe(dataset_dir: Path) -> list[str]:
+    explicit_candidates = dataset_dir / "target_candidates.jsonl"
+    if explicit_candidates.exists():
+        out: list[str] = []
+        seen: set[str] = set()
+        for line in explicit_candidates.read_text().splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            target = str(row.get("target_path") or row.get("path") or "").strip()
+            if not target or target in seen:
+                continue
+            seen.add(target)
+            out.append(target)
+        if out:
+            return out
+    gt_path = dataset_dir / "ground_truth.jsonl"
+    if not gt_path.exists():
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for line in gt_path.read_text().splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        target = str(row.get("target_path") or "").strip()
+        if not target or target in seen:
+            continue
+        seen.add(target)
+        out.append(target)
+    return out
+
+
 def _validate_mapping(
     mapping: dict,
     source_protocol: str,
@@ -197,7 +230,14 @@ def main() -> None:
     decision_trace: list[dict] = []
     perf_trace: list[dict] = []
     execution_trace: list[dict] = []
+    sample_diagnostics: list[dict] = []
     dataset_rows = _read_dataset(dataset_dir, max_samples)
+    target_universe = _load_target_universe(dataset_dir)
+    if not target_universe:
+        raise RuntimeError(
+            f"No target candidates available for DATASET_DIR={dataset_dir}. "
+            "Expected non-empty target_path values in ground_truth.jsonl."
+        )
     total = len(dataset_rows)
     log(f"[SUITE] stage=translation total={total} completed=0 remaining={total}")
     seen_keys: set[tuple[str, str, str]] = set()
@@ -220,12 +260,15 @@ def main() -> None:
         log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
         item_start = time.perf_counter()
         allow_gt_hints = str(os.getenv("ALLOW_TARGET_HINTS", "0")).strip().lower() in {"1", "true", "yes"}
+        target_candidates = list(target_universe)
+        if allow_gt_hints and expected_target and expected_target not in target_candidates:
+            target_candidates.append(expected_target)
         result = translator.translate(
             row_source_protocol,
             row_target_protocol,
             str(sample_path),
             mode=mode,
-            target_candidates=[expected_target] if (allow_gt_hints and expected_target) else None,
+            target_candidates=target_candidates,
         )
         item_elapsed = time.perf_counter() - item_start
         metadata = (result.provenance.metadata or {}) if result.provenance else {}
@@ -295,6 +338,16 @@ def main() -> None:
             "llm_output": llm_entry.get("raw", {}),
         }
         llm_trace.append(llm_trace_item)
+        llm_raw_target = ""
+        llm_confidence = 0.0
+        llm_output_payload = llm_entry.get("raw", {}) if isinstance(llm_entry, dict) else {}
+        llm_output_mappings = llm_output_payload.get("mappings", []) if isinstance(llm_output_payload, dict) else []
+        if llm_output_mappings:
+            llm_raw_target = str(llm_output_mappings[0].get("target_path") or "")
+            try:
+                llm_confidence = float(llm_output_mappings[0].get("confidence", 0.0))
+            except (TypeError, ValueError):
+                llm_confidence = 0.0
         execution = metadata.get("execution", {})
         execution_trace.append(
             {
@@ -372,6 +425,34 @@ def main() -> None:
 
         valid = len(item_violations) == 0
         validations.append({"valid": valid, "violations": item_violations, "cardinality_contract": contract})
+        ranked_candidates = []
+        for item in result.evidence[:5]:
+            ranked_candidates.append(
+                {
+                    "target_path": str(item.payload.get("target_hint", "")),
+                    "score": float(item.score),
+                }
+            )
+        top_retrieval_score = ranked_candidates[0]["score"] if ranked_candidates else 0.0
+        rejection_reason = item_violations[0]["type"] if item_violations else ""
+        sample_diagnostics.append(
+            {
+                "sample": sample_path.name,
+                "pair": f"{str(row.get('source_standard', source_protocol)).upper()}->{str(row.get('target_standard', target_protocol)).upper()}",
+                "expected_target": expected_target,
+                "source_variable_count": len(result.mappings),
+                "available_candidate_count": len(target_candidates),
+                "retrieved_top_candidates": ranked_candidates,
+                "raw_llm_target": llm_raw_target,
+                "final_selected_target": str((top_pred or {}).get("target_path", "")),
+                "final_mappings_before_cardinality": [m.model_dump() for m in result.mappings],
+                "llm_confidence": llm_confidence,
+                "retrieval_score": top_retrieval_score,
+                "final_confidence": float((top_pred or {}).get("confidence", 0.0)),
+                "validation_result": valid,
+                "rejection_reason": rejection_reason,
+            }
+        )
         sample_results.append(
             {
                 "sample": sample_path.name,
@@ -428,6 +509,9 @@ def main() -> None:
     (predictions_dir / "decision_trace.jsonl").write_text("\n".join(json.dumps(row) for row in decision_trace) + ("\n" if decision_trace else ""))
     (predictions_dir / "perf_trace.jsonl").write_text("\n".join(json.dumps(row) for row in perf_trace) + ("\n" if perf_trace else ""))
     (predictions_dir / "execution_trace.jsonl").write_text("\n".join(json.dumps(row) for row in execution_trace) + ("\n" if execution_trace else ""))
+    (predictions_dir / "sample_diagnostics.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in sample_diagnostics) + ("\n" if sample_diagnostics else "")
+    )
     (predictions_dir / "errors_summary.json").write_text(json.dumps(errors_summary, indent=2))
 
     if execution_trace:
