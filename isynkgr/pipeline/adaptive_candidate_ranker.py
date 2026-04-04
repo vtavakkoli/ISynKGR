@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import difflib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -147,6 +148,25 @@ def _semantic_hint_from_path(path: str) -> dict[str, str]:
     return {"label": signal or "candidate", "unit": unit, "datatype": datatype}
 
 
+def _context_hints_from_path(path: str) -> dict[str, str]:
+    raw = str(path or "").strip().rstrip("/")
+    tokens = [t for t in raw.split("/") if t]
+    lower_tokens = [t.lower() for t in tokens]
+    asset_id = next((t for t in tokens if re.match(r"(?i)^asset[-_ ]?\d+$", t)), "")
+    equipment_id = next((t for t in tokens if re.match(r"(?i)^(pump|motor|line|machine|equipment)[-_ ]?\d+$", t)), "")
+    process_line = next((t for t in tokens if re.match(r"(?i)^(line|resource|res|device)[-_ ]?\d+$", t)), "")
+    parent_path = "/".join(tokens[:-1]) if len(tokens) > 1 else ""
+    benchmark_entity_id = asset_id or equipment_id or (tokens[1] if len(tokens) > 2 else "")
+    return {
+        "asset_id": asset_id,
+        "equipment_id": equipment_id,
+        "process_line": process_line,
+        "parent_path": parent_path,
+        "benchmark_entity_id": benchmark_entity_id,
+        "context_tokens": " ".join(lower_tokens),
+    }
+
+
 def _build_target_model_from_candidates(target_standard: str, target_candidates: list[str]) -> CanonicalModel:
     std = target_standard.lower()
     cleaned: list[str] = []
@@ -162,6 +182,7 @@ def _build_target_model_from_candidates(target_standard: str, target_candidates:
     nodes: list[CanonicalNode] = []
     for path in cleaned:
         hints = _semantic_hint_from_path(path)
+        context = _context_hints_from_path(path)
         nodes.append(
             CanonicalNode(
                 id=path,
@@ -171,6 +192,7 @@ def _build_target_model_from_candidates(target_standard: str, target_candidates:
                     "datatype": hints["datatype"],
                     "unit": hints["unit"],
                     "description": f"candidate derived from path {path}",
+                    **context,
                 },
             )
         )
@@ -207,6 +229,22 @@ def _parent_map(model: CanonicalModel) -> dict[str, str]:
         if edge.target not in out:
             out[edge.target] = edge.source
     return out
+
+
+def _semantic_signature(node: CanonicalNode | None) -> str:
+    if node is None:
+        return ""
+    return "|".join(
+        [
+            str(node.label or "").strip().lower(),
+            _guess_dtype(node).lower(),
+            _guess_unit(node).lower(),
+        ]
+    )
+
+
+def _path_tokens(path: str) -> set[str]:
+    return {t.lower() for t in re.findall(r"[A-Za-z0-9_-]+", str(path or "")) if t}
 
 
 @dataclass
@@ -372,6 +410,12 @@ class AdaptiveCandidateRankerPipeline:
             src_dtype = _guess_dtype(source_node)
             src_unit = _guess_unit(source_node)
             src_parent = source_parent.get(source_node.id, "")
+            src_tokens = _path_tokens(source_path) | _path_tokens(src_parent)
+            signature_counts: dict[str, int] = {}
+            for target_path in candidates_by_source[source_path]:
+                signature = _semantic_signature(target_index.get(target_path))
+                if signature:
+                    signature_counts[signature] = signature_counts.get(signature, 0) + 1
 
             scored: list[CandidateState] = []
             for target_path, state in candidates_by_source[source_path].items():
@@ -388,6 +432,13 @@ class AdaptiveCandidateRankerPipeline:
                 unit_compat = 1.0 if src_unit and _guess_unit(target_node) and src_unit == _guess_unit(target_node) else (0.5 if not src_unit or not _guess_unit(target_node) else 0.0)
                 parent_sim = _lexical_similarity(src_parent, target_parent.get(target_node.id, "")) if src_parent or target_parent.get(target_node.id, "") else 0.5
                 rule_hit = 1.0 if "rules" in state.support else 0.0
+                target_tokens = _path_tokens(target_path) | _path_tokens(str((target_node.attributes or {}).get("parent_path", "")))
+                context_overlap = len(src_tokens & target_tokens)
+                context_score = min(1.0, context_overlap / 3.0) if target_tokens else 0.0
+                duplicate_count = signature_counts.get(_semantic_signature(target_node), 1)
+                duplicate_penalty = max(0.0, min(0.2, (duplicate_count - 1) * 0.05))
+                if context_score > 0.0:
+                    duplicate_penalty *= 0.5
 
                 breakdown = {
                     "lexical_similarity": lexical,
@@ -396,6 +447,9 @@ class AdaptiveCandidateRankerPipeline:
                     "datatype_compatibility": datatype_compat,
                     "unit_compatibility": unit_compat,
                     "parent_context_similarity": parent_sim,
+                    "path_context_similarity": context_score,
+                    "duplicate_semantic_count": float(duplicate_count),
+                    "duplicate_ambiguity_penalty": duplicate_penalty,
                     "retrieval_score": retrieval_score,
                 }
                 total_score = (
@@ -405,8 +459,10 @@ class AdaptiveCandidateRankerPipeline:
                     + datatype_compat * 0.14
                     + unit_compat * 0.12
                     + parent_sim * 0.1
+                    + context_score * 0.08
                     + retrieval_score * 0.14
                 )
+                total_score -= duplicate_penalty
                 if len(state.support) > 1:
                     total_score += 0.08
                 state.score_breakdown = breakdown
@@ -553,6 +609,27 @@ class AdaptiveCandidateRankerPipeline:
                 valid_states.append(state)
             valid_states_by_source[source_path] = valid_states
 
+        ambiguity_margin = float(flags["ambiguity_margin"])
+        forced_no_match_sources: set[str] = set()
+        for source_path, states in valid_states_by_source.items():
+            if len(states) < 2:
+                continue
+            top = states[0]
+            runner_up = states[1]
+            if (top.total_score - runner_up.total_score) > ambiguity_margin:
+                continue
+            top_target = target_index.get(top.mapping.target_path)
+            runner_target = target_index.get(runner_up.mapping.target_path)
+            if _semantic_signature(top_target) != _semantic_signature(runner_target):
+                continue
+            top_context = float(top.score_breakdown.get("path_context_similarity", 0.0))
+            runner_context = float(runner_up.score_breakdown.get("path_context_similarity", 0.0))
+            if max(top_context, runner_context) >= 0.34:
+                continue
+            if "rules" in top.support and "rules" in runner_up.support and top.mapping.target_path != runner_up.mapping.target_path:
+                continue
+            forced_no_match_sources.add(source_path)
+
         assigned_sources: set[str] = set()
         used_targets: set[str] = set()
         global_ranked: list[tuple[float, str, CandidateState]] = []
@@ -561,6 +638,8 @@ class AdaptiveCandidateRankerPipeline:
                 global_ranked.append((state.total_score, source_path, state))
         global_ranked.sort(key=lambda x: x[0], reverse=True)
         for _, source_path, state in global_ranked:
+            if source_path in forced_no_match_sources:
+                continue
             if source_path in assigned_sources:
                 continue
             if state.mapping.target_path in used_targets:
@@ -583,6 +662,21 @@ class AdaptiveCandidateRankerPipeline:
 
         for source_path in source_paths:
             if source_path in final_by_source:
+                continue
+            if source_path in forced_no_match_sources:
+                final_by_source[source_path] = normalize_mapping_item(
+                    {
+                        "source_path": source_path,
+                        "target_path": "",
+                        "mapping_type": "no_match",
+                        "transform": None,
+                        "confidence": 0.0,
+                        "rationale": "Ambiguous duplicate candidates share the same semantic signature and lack asset-level context.",
+                        "evidence": ["ranker:ambiguous_duplicate_candidates"],
+                    },
+                    source_standard,
+                    target_standard,
+                )
                 continue
             final_by_source[source_path] = normalize_mapping_item(
                 {
