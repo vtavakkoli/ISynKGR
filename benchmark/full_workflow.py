@@ -85,15 +85,17 @@ def _source_fixture_path(source_standard: str, idx: int, source_dir: Path) -> Pa
 
 
 def _synthetic_id_for_standard(standard: str, idx: int, default: str) -> str:
+    semantic_signals = ["temperature", "pressure", "flow", "speed", "state", "vibration"]
+    signal = semantic_signals[idx % len(semantic_signals)]
     s = standard.upper()
     if s == "OPCUA":
-        return f"opcua://ns=2;i={1000 + idx}"
+        return f"opcua://ns=2;s={signal.capitalize()}{idx}"
     if s == "AAS":
-        return f"aas://asset/submodel/default/element/value_{idx}"
+        return f"aas://asset/telemetry/submodel/process/element/{signal}/value"
     if s == "IEEE1451":
-        return f"ieee1451://teds{idx}/ch{idx % 4}/value"
+        return f"ieee1451://teds{idx}/ch{idx % 4}/{signal}/value"
     if s == "IEC61499":
-        return f"iec61499://Device{idx}/Res1/FB1/OUT_VALUE"
+        return f"iec61499://Device{idx}/Res1/FB1/{signal.upper()}_OUT"
     if s == "ISO15926":
         return f"iso15926://class/{idx}"
     return default
