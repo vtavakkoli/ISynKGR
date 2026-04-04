@@ -246,15 +246,15 @@ class AdaptiveCandidateRankerPipeline:
         if target_candidates:
             for source_path in source_paths:
                 for candidate in target_candidates:
-                    retrieval_by_source[source_path].append(
-                        EvidenceItem(
-                            id=f"candidate:{source_path}:{candidate}",
-                            kind="target_candidate",
-                            text=candidate,
-                            score=0.99,
-                            payload={"source_node": source_path, "candidate_path": candidate, "target_hint": candidate, "label": candidate.rsplit("/", 2)[-2]},
-                        )
+                    item = EvidenceItem(
+                        id=f"candidate:{source_path}:{candidate}",
+                        kind="target_candidate",
+                        text=candidate,
+                        score=0.99,
+                        payload={"source_node": source_path, "candidate_path": candidate, "target_hint": candidate, "label": candidate.rsplit("/", 2)[-2]},
                     )
+                    retrieval_by_source[source_path].append(item)
+                    evidence.append(item)
 
         rules_by_source: dict[str, list[Mapping]] = {p: [] for p in source_paths}
         if flags["rules"]:
@@ -435,6 +435,22 @@ class AdaptiveCandidateRankerPipeline:
                             state.support.add("llm")
                             state.score_breakdown["llm_confidence"] = llm_conf
                             state.total_score = min(1.0, max(state.total_score + 0.06, llm_conf))
+                if not llm_by_source[source_path]:
+                    llm_by_source[source_path].append(
+                        normalize_mapping_item(
+                            {
+                                "source_path": source_path,
+                                "target_path": "",
+                                "mapping_type": "no_match",
+                                "transform": None,
+                                "confidence": 0.0,
+                                "rationale": "LLM produced no usable mapping for this source variable.",
+                                "evidence": ["llm:no_decision"],
+                            },
+                            source_standard,
+                            target_standard,
+                        )
+                    )
                 llm_invocation_log.append({"source_path": source_path, "invoked": True, "reason": "uncertain_or_disagreement", "top1": top1, "top2": top2, "rules_retrieval_disagree": disagreement})
             else:
                 llm_invocation_log.append({"source_path": source_path, "invoked": False, "reason": "high_confidence_non_ambiguous", "top1": top1, "top2": top2, "rules_retrieval_disagree": disagreement})
@@ -448,8 +464,8 @@ class AdaptiveCandidateRankerPipeline:
             }
 
         final_by_source: dict[str, Mapping] = {}
-        used_targets: set[str] = set()
         ranking_trace: dict[str, list[dict[str, Any]]] = {}
+        valid_states_by_source: dict[str, list[CandidateState]] = {}
 
         for source_path in source_paths:
             states = list(candidates_by_source[source_path].values())
@@ -464,8 +480,7 @@ class AdaptiveCandidateRankerPipeline:
                 }
                 for s in states[:8]
             ]
-
-            winner: Mapping | None = None
+            valid_states: list[CandidateState] = []
             for state in states:
                 mapping = state.mapping
                 if mapping.mapping_type not in {
@@ -486,39 +501,53 @@ class AdaptiveCandidateRankerPipeline:
                     tgt_unit = _guess_unit(target_index[mapping.target_path])
                     if src_unit and tgt_unit and src_unit != tgt_unit:
                         continue
-                if mapping.target_path in used_targets:
-                    continue
-                winner = normalize_mapping_item(
-                    {
-                        **mapping.model_dump(),
-                        "source_path": source_path,
-                        "confidence": max(float(mapping.confidence), state.total_score),
-                        "rationale": f"Adaptive candidate ranker selected highest valid candidate with support={sorted(state.support)}.",
-                        "evidence": [*mapping.evidence, "ranker:final_selection"],
-                    },
-                    source_standard,
-                    target_standard,
-                )
-                break
+                valid_states.append(state)
+            valid_states_by_source[source_path] = valid_states
 
-            if winner is None:
-                winner = normalize_mapping_item(
-                    {
-                        "source_path": source_path,
-                        "target_path": "",
-                        "mapping_type": "no_match",
-                        "transform": None,
-                        "confidence": 0.0,
-                        "rationale": "No valid target candidate after constraint enforcement.",
-                        "evidence": ["ranker:no_valid_candidate"],
-                    },
-                    source_standard,
-                    target_standard,
-                )
-            elif winner.target_path:
+        assigned_sources: set[str] = set()
+        used_targets: set[str] = set()
+        global_ranked: list[tuple[float, str, CandidateState]] = []
+        for source_path, states in valid_states_by_source.items():
+            for state in states:
+                global_ranked.append((state.total_score, source_path, state))
+        global_ranked.sort(key=lambda x: x[0], reverse=True)
+        for _, source_path, state in global_ranked:
+            if source_path in assigned_sources:
+                continue
+            if state.mapping.target_path in used_targets:
+                continue
+            winner = normalize_mapping_item(
+                {
+                    **state.mapping.model_dump(),
+                    "source_path": source_path,
+                    "confidence": max(float(state.mapping.confidence), state.total_score),
+                    "rationale": f"Adaptive candidate ranker selected highest valid candidate with support={sorted(state.support)}.",
+                    "evidence": [*state.mapping.evidence, "ranker:final_selection"],
+                },
+                source_standard,
+                target_standard,
+            )
+            final_by_source[source_path] = winner
+            assigned_sources.add(source_path)
+            if winner.target_path:
                 used_targets.add(winner.target_path)
 
-            final_by_source[source_path] = winner
+        for source_path in source_paths:
+            if source_path in final_by_source:
+                continue
+            final_by_source[source_path] = normalize_mapping_item(
+                {
+                    "source_path": source_path,
+                    "target_path": "",
+                    "mapping_type": "no_match",
+                    "transform": None,
+                    "confidence": 0.0,
+                    "rationale": "No valid target candidate after constraint enforcement.",
+                    "evidence": ["ranker:no_valid_candidate"],
+                },
+                source_standard,
+                target_standard,
+            )
 
         mappings = [final_by_source[source_path] for source_path in source_paths]
         target_artifact = tgt.serialize(target_model, [m.model_dump() for m in mappings])

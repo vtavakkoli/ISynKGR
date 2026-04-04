@@ -34,6 +34,21 @@ def _read_dataset(dataset_dir: Path, max_samples: int) -> list[dict]:
 
 
 def _load_target_universe(dataset_dir: Path) -> list[str]:
+    explicit_candidates = dataset_dir / "target_candidates.jsonl"
+    if explicit_candidates.exists():
+        out: list[str] = []
+        seen: set[str] = set()
+        for line in explicit_candidates.read_text().splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            target = str(row.get("target_path") or row.get("path") or "").strip()
+            if not target or target in seen:
+                continue
+            seen.add(target)
+            out.append(target)
+        if out:
+            return out
     gt_path = dataset_dir / "ground_truth.jsonl"
     if not gt_path.exists():
         return []
@@ -425,10 +440,12 @@ def main() -> None:
                 "sample": sample_path.name,
                 "pair": f"{str(row.get('source_standard', source_protocol)).upper()}->{str(row.get('target_standard', target_protocol)).upper()}",
                 "expected_target": expected_target,
+                "source_variable_count": len(result.mappings),
                 "available_candidate_count": len(target_candidates),
                 "retrieved_top_candidates": ranked_candidates,
                 "raw_llm_target": llm_raw_target,
                 "final_selected_target": str((top_pred or {}).get("target_path", "")),
+                "final_mappings_before_cardinality": [m.model_dump() for m in result.mappings],
                 "llm_confidence": llm_confidence,
                 "retrieval_score": top_retrieval_score,
                 "final_confidence": float((top_pred or {}).get("confidence", 0.0)),
