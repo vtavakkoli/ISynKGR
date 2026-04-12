@@ -6,7 +6,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
-      MODEL_NAME: ${MODEL_NAME:-qwen3.5:0.8b}
+      MODEL_NAME: ${MODEL_NAME:-gemma4:e2b}
       SEED: ${SEED:-42}
       MAX_ITEMS: "5"
       TIER: ${TIER:-canonical}
@@ -33,7 +33,7 @@ services:
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_READY_TIMEOUT_S: ${OLLAMA_READY_TIMEOUT_S:-180}
-      MODEL_NAME: ${MODEL_NAME:-qwen3.5:0.8b}
+      MODEL_NAME: ${MODEL_NAME:-gemma4:e2b}
       SEED: ${SEED:-42}
       MAX_ITEMS: ${MAX_ITEMS:-2}
       TIER: ${TIER:-canonical}
@@ -58,7 +58,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
-      MODEL_NAME: ${MODEL_NAME:-qwen3.5:0.8b}
+      MODEL_NAME: ${MODEL_NAME:-gemma4:e2b}
       SEED: ${SEED:-42}
       MAX_ITEMS: ${MAX_ITEMS:-100}
       TIER: ${TIER:-canonical}
@@ -100,7 +100,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      MODEL_NAME: ${MODEL_NAME:-qwen3.5:0.8b}
+      MODEL_NAME: ${MODEL_NAME:-gemma4:e2b}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command:

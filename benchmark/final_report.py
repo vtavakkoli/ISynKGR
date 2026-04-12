@@ -4,6 +4,7 @@ import csv
 import json
 from pathlib import Path
 
+from benchmark.data_gen.pipeline import _synthetic_id_for_standard
 from benchmark.evaluate import evaluate_run
 from benchmark.report import write_report
 from isynkgr.pipeline.adaptive_candidate_ranker import TranslatorConfig
@@ -14,7 +15,27 @@ BASELINES = ["rule_only", "graph_only", "adaptive_candidate_ranker", "rag_only",
 
 def _load_gt_subset(limit: int) -> list[dict]:
     gt = Path("datasets/v1/crosswalk/gt_mappings.jsonl")
-    return [json.loads(line) for line in gt.read_text().splitlines() if line.strip()][:limit]
+    rows: list[dict] = []
+    for idx, line in enumerate(gt.read_text().splitlines()):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        source_standard = str(row.get("source_standard") or "OPCUA")
+        target_standard = str(row.get("target_standard") or "AAS")
+        source_raw = str(row.get("source_path") or row.get("source_id") or "")
+        target_raw = str(row.get("target_path") or row.get("target_id") or "")
+        source_path = _synthetic_id_for_standard(source_standard, idx, source_raw)
+        target_path = _synthetic_id_for_standard(target_standard, idx, target_raw)
+        rows.append(
+            {
+                **row,
+                "source_path": source_path,
+                "target_path": target_path,
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
 
 
 def _run_local_baseline(mode: str, out_dir: Path) -> None:

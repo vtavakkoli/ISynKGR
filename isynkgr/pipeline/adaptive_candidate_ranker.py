@@ -36,7 +36,7 @@ Mode = Literal[
 class TranslatorConfig:
     def __init__(
         self,
-        model_name: str = "qwen3.5:0.8b",
+        model_name: str = "gemma4:e2b",
         seed: int = 42,
         max_repair_iterations: int = 2,
         enable_vector_retrieval: bool = False,
@@ -50,6 +50,7 @@ class TranslatorConfig:
 
 
 ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter(), "iec61499": IEC61499Adapter(), "ieee1451": IEEE1451Adapter(), "iso15926": ISO15926Adapter()}
+MIN_RETRIEVAL_THRESHOLD = 0.5
 
 
 def _git_commit() -> str:
@@ -329,6 +330,22 @@ class AdaptiveCandidateRankerPipeline:
                     retrieval_by_source[source_node].append(ev)
             for source_node in retrieval_by_source:
                 retrieval_by_source[source_node] = sorted(retrieval_by_source[source_node], key=lambda x: float(x.score), reverse=True)
+            target_prefix = f"{target_standard.lower()}://"
+            for items in retrieval_by_source.values():
+                for ev in items:
+                    candidate_path = str((ev.payload or {}).get("candidate_path") or "").strip()
+                    if not candidate_path or not candidate_path.startswith(target_prefix):
+                        continue
+                    allowed_external_targets.add(candidate_path)
+                    if candidate_path in target_index:
+                        continue
+                    hints = _semantic_hint_from_path(candidate_path)
+                    target_index[candidate_path] = CanonicalNode(
+                        id=candidate_path,
+                        type="Candidate",
+                        label=hints["label"] or _guess_label_from_path(candidate_path),
+                        attributes={"datatype": hints["datatype"], "unit": hints["unit"]},
+                    )
 
         if target_candidates and not flags["retrieval"]:
             for source_path in source_paths:
@@ -603,6 +620,12 @@ class AdaptiveCandidateRankerPipeline:
                     MappingType.TRANSFORM,
                     MappingType.LABEL_MATCH,
                 }:
+                    continue
+                retrieval_score = float(state.score_breakdown.get("retrieval_score", 0.0))
+                if "retrieval" in state.support and "rules" not in state.support and "llm" not in state.support and retrieval_score < MIN_RETRIEVAL_THRESHOLD:
+                    state.rejected_reasons.append(
+                        f"retrieval_score_below_min_threshold:{retrieval_score:.3f}<{MIN_RETRIEVAL_THRESHOLD:.3f}"
+                    )
                     continue
                 if strict_target_existence and mapping.target_path not in target_index and mapping.target_path not in allowed_external_targets:
                     continue

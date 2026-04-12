@@ -295,7 +295,7 @@ def run_full_workflow() -> int:
                 {
                     "robustness": robustness,
                     "limitations": ["Unsupported pairs are skipped and recorded in skipped_pairs.json."],
-                    "runtime_dependencies": {"model": os.getenv("MODEL_NAME", "qwen3.5:0.8b")},
+                    "runtime_dependencies": {"model": os.getenv("MODEL_NAME", "gemma4:e2b")},
                 },
                 indent=2,
             )

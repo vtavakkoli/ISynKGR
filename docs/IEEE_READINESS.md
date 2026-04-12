@@ -17,7 +17,7 @@ This repository benchmarks adaptive semantic interoperability across heterogeneo
 
 ## Experiment Setup
 - Runtime: Docker `full-run` service.
-- Model: `MODEL_NAME` env var (default `qwen3.5:0.8b`).
+- Model: `MODEL_NAME` env var (default `gemma4:e2b`).
 - Seeds: `[11, 23, 37]` in `benchmark/full_workflow.py`.
 - Dataset version: generated artifact dataset + `datasets/v1/crosswalk/gt_mappings.jsonl`.
 
