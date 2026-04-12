@@ -50,7 +50,7 @@ class TranslatorConfig:
 
 
 ADAPTERS = {"opcua": OPCUAAdapter(), "aas": AASAdapter(), "iec61499": IEC61499Adapter(), "ieee1451": IEEE1451Adapter(), "iso15926": ISO15926Adapter()}
-MIN_RETRIEVAL_THRESHOLD = 0.5
+RETRIEVAL_CONFIDENCE_THRESHOLD = 0.5
 
 
 def _git_commit() -> str:
@@ -417,6 +417,7 @@ class AdaptiveCandidateRankerPipeline:
         llm_raw_output: list[dict[str, Any]] = []
         llm_by_source: dict[str, list[Mapping]] = {p: [] for p in source_paths}
         llm_invocation_log: list[dict[str, Any]] = []
+        llm_explicit_no_match_sources: set[str] = set()
 
         prompt = ""
         if flags["llm"]:
@@ -557,6 +558,8 @@ class AdaptiveCandidateRankerPipeline:
                                 target_standard,
                             )
                     llm_by_source[source_path].append(normalized)
+                    if normalized.mapping_type == MappingType.NO_MATCH:
+                        llm_explicit_no_match_sources.add(source_path)
                     if normalized.mapping_type != MappingType.NO_MATCH:
                         state = candidates_by_source[source_path].get(normalized.target_path)
                         llm_conf = float(normalized.confidence)
@@ -622,9 +625,9 @@ class AdaptiveCandidateRankerPipeline:
                 }:
                     continue
                 retrieval_score = float(state.score_breakdown.get("retrieval_score", 0.0))
-                if "retrieval" in state.support and "rules" not in state.support and "llm" not in state.support and retrieval_score < MIN_RETRIEVAL_THRESHOLD:
+                if "retrieval" in state.support and "rules" not in state.support and "llm" not in state.support and retrieval_score < RETRIEVAL_CONFIDENCE_THRESHOLD:
                     state.rejected_reasons.append(
-                        f"retrieval_score_below_min_threshold:{retrieval_score:.3f}<{MIN_RETRIEVAL_THRESHOLD:.3f}"
+                        f"retrieval_score_below_min_threshold:{retrieval_score:.3f}<{RETRIEVAL_CONFIDENCE_THRESHOLD:.3f}"
                     )
                     continue
                 if strict_target_existence and mapping.target_path not in target_index and mapping.target_path not in allowed_external_targets:
@@ -713,6 +716,24 @@ class AdaptiveCandidateRankerPipeline:
                     target_standard,
                 )
                 continue
+            if source_path in llm_explicit_no_match_sources:
+                retrieval_fallback = next((state for state in valid_states_by_source.get(source_path, []) if "retrieval" in state.support), None)
+                if retrieval_fallback is not None:
+                    retrieval_score = float(retrieval_fallback.score_breakdown.get("retrieval_score", 0.0))
+                    if retrieval_score >= RETRIEVAL_CONFIDENCE_THRESHOLD:
+                        winner = normalize_mapping_item(
+                            {
+                                **retrieval_fallback.mapping.model_dump(),
+                                "source_path": source_path,
+                                "confidence": max(float(retrieval_fallback.mapping.confidence), retrieval_fallback.total_score),
+                                "rationale": "Fallback to retrieval candidate after LLM no_match with sufficient retrieval confidence.",
+                                "evidence": [*retrieval_fallback.mapping.evidence, "ranker:llm_no_match_retrieval_fallback"],
+                            },
+                            source_standard,
+                            target_standard,
+                        )
+                        final_by_source[source_path] = winner
+                        continue
             final_by_source[source_path] = normalize_mapping_item(
                 {
                     "source_path": source_path,
@@ -720,8 +741,16 @@ class AdaptiveCandidateRankerPipeline:
                     "mapping_type": "no_match",
                     "transform": None,
                     "confidence": 0.0,
-                    "rationale": "No valid target candidate after constraint enforcement.",
-                    "evidence": ["ranker:no_valid_candidate"],
+                    "rationale": (
+                        "No valid target candidate after constraint enforcement."
+                        if source_path not in llm_explicit_no_match_sources
+                        else "LLM returned no_match and retrieval fallback did not meet confidence threshold."
+                    ),
+                    "evidence": (
+                        ["ranker:no_valid_candidate"]
+                        if source_path not in llm_explicit_no_match_sources
+                        else ["ranker:llm_no_match_retrieval_rejected"]
+                    ),
                 },
                 source_standard,
                 target_standard,

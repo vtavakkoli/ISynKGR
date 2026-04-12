@@ -13,6 +13,32 @@ from isynkgr.translator import Translator
 BASELINES = ["rule_only", "graph_only", "adaptive_candidate_ranker", "rag_only", "llm_only"]
 
 
+def normalize_target_path(path: str | None) -> str | None:
+    raw = str(path or "").strip()
+    if not raw:
+        return None
+    lowered = raw.lower()
+    if lowered in {"<none>", "no_match"}:
+        return None
+    return raw
+
+
+def _component_attribution(evidence: list[str] | None) -> str:
+    evidence_items = [str(item).lower() for item in (evidence or [])]
+    parts: list[str] = []
+    if any("rules" in item for item in evidence_items):
+        parts.append("rules")
+    if any("retrieval" in item for item in evidence_items):
+        parts.append("retrieval")
+    if any("llm" in item for item in evidence_items):
+        parts.append("llm")
+    if not parts:
+        return "unknown"
+    if len(parts) == 1:
+        return f"{parts[0]}_only"
+    return "+".join(parts)
+
+
 def _load_gt_subset(limit: int) -> list[dict]:
     gt = Path("datasets/v1/crosswalk/gt_mappings.jsonl")
     rows: list[dict] = []
@@ -79,11 +105,47 @@ def generate_final_report() -> Path:
     (final_dir / "ground_truth.jsonl").write_text(gt_subset_text)
 
     rows = []
+    comparison_rows: list[dict] = []
     for mode in BASELINES:
         out_dir = final_dir / mode
         _run_local_baseline(mode, out_dir)
         metrics = evaluate_run(out_dir)
         metrics["baseline"] = mode
+        pred_rows: dict[str, dict] = {}
+        for line in (out_dir / "mappings.jsonl").read_text().splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            pred_rows[str(row.get("source_path") or "")] = row
+
+        attribution_counts: dict[str, int] = {}
+        for idx, gt_row in enumerate(gt_subset):
+            source_path = str(gt_row.get("source_path") or "")
+            expected_raw = normalize_target_path(gt_row.get("target_path"))
+            pred_row = pred_rows.get(source_path, {})
+            predicted_raw = normalize_target_path(str(pred_row.get("target_path") or ""))
+            expected = normalize_target_path(
+                _synthetic_id_for_standard(str(gt_row.get("target_standard") or "AAS"), idx, expected_raw or "")
+            )
+            predicted = normalize_target_path(
+                _synthetic_id_for_standard(str(gt_row.get("target_standard") or "AAS"), idx, predicted_raw or "")
+            )
+            matched = predicted == expected
+            attribution = _component_attribution(pred_row.get("evidence") or [])
+            attribution_counts[attribution] = attribution_counts.get(attribution, 0) + 1
+            comparison_rows.append(
+                {
+                    "baseline": mode,
+                    "source_path": source_path,
+                    "expected_target_path": expected or "<none>",
+                    "predicted_target_path": predicted or "<none>",
+                    "match": matched,
+                    "component_attribution": attribution,
+                }
+            )
+        metrics["component_attribution"] = ";".join(
+            f"{name}:{count}" for name, count in sorted(attribution_counts.items())
+        )
         rows.append(metrics)
 
     fieldnames = sorted({k for r in rows for k in r.keys() if k != "violation_counts"})
@@ -94,6 +156,21 @@ def generate_final_report() -> Path:
             copy = row.copy()
             copy.pop("violation_counts", None)
             writer.writerow(copy)
+    with (final_dir / "comparison.csv").open("w", newline="") as fp:
+        writer = csv.DictWriter(
+            fp,
+            fieldnames=[
+                "baseline",
+                "source_path",
+                "expected_target_path",
+                "predicted_target_path",
+                "match",
+                "component_attribution",
+            ],
+        )
+        writer.writeheader()
+        for row in comparison_rows:
+            writer.writerow(row)
 
     (final_dir / "metrics.json").write_text(json.dumps(rows, indent=2))
     write_report(final_dir, rows)
