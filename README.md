@@ -1,6 +1,6 @@
 # ISynKGR Benchmark Framework
 
-ISynKGR is a publication-oriented benchmark framework for industrial schema/path mapping across protocols (OPC UA, AAS, IEEE1451, IEC61499, ISO15926).
+ISynKGR is a benchmark framework for industrial schema/path mapping across protocols (OPC UA, AAS, IEEE1451, IEC61499, ISO15926).
 
 ## Purpose
 
