@@ -78,7 +78,7 @@ def _build_default_target_model(target_standard: str) -> CanonicalModel:
     if std == "aas":
         labels = ["temperature", "pressure", "flow", "state", "speed", "vibration"]
         nodes = [
-            CanonicalNode(id=f"aas://asset/submodel/default/element/{label}/value", type="Property", label=label, attributes={"datatype": "FLOAT" if label != "state" else "STRING"})
+            CanonicalNode(id=f"aas://asset-0/submodel/default/element/{label}/value", type="Property", label=label, attributes={"datatype": "FLOAT" if label != "state" else "STRING"})
             for label in labels
         ]
         return CanonicalModel(standard=std, nodes=nodes, edges=[])
@@ -245,6 +245,15 @@ def _semantic_signature(node: CanonicalNode | None) -> str:
 
 def _path_tokens(path: str) -> set[str]:
     return {t.lower() for t in re.findall(r"[A-Za-z0-9_-]+", str(path or "")) if t}
+
+
+def _is_equipment_label_without_measurement(node: CanonicalNode) -> bool:
+    label = str(node.label or node.id or "").lower()
+    equipment_terms = {"pump", "motor", "line", "device", "equipment", "machine"}
+    measurement_terms = {"temp", "temperature", "pressure", "flow", "speed", "current", "voltage", "vibration", "state", "status"}
+    has_equipment = any(term in label for term in equipment_terms)
+    has_measurement = any(term in label for term in measurement_terms)
+    return has_equipment and not has_measurement
 
 
 @dataclass
@@ -612,6 +621,9 @@ class AdaptiveCandidateRankerPipeline:
         ambiguity_margin = float(flags["ambiguity_margin"])
         forced_no_match_sources: set[str] = set()
         for source_path, states in valid_states_by_source.items():
+            if _is_equipment_label_without_measurement(source_index[source_path]):
+                forced_no_match_sources.add(source_path)
+                continue
             if len(states) < 2:
                 continue
             top = states[0]

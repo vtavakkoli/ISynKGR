@@ -115,7 +115,7 @@ def evaluate_run(out_dir: Path, evaluation_mode: str = "exact_match") -> dict:
 
     benchmark_prefix = "aas://"
     benchmark_shape_hits = sum(
-        1 for row in pred_rows if str(row.get("target_path", "")).startswith(benchmark_prefix) and "/submodel/default/element/value" in str(row.get("target_path", ""))
+        1 for row in pred_rows if str(row.get("target_path", "")).startswith(benchmark_prefix) and "/submodel/default/element/" in str(row.get("target_path", "")) and str(row.get("target_path", "")).endswith("/value")
     )
     benchmark_target_shape_rate = benchmark_shape_hits / len(pred_rows) if pred_rows else 0.0
 

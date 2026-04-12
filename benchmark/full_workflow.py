@@ -11,24 +11,12 @@ from pathlib import Path
 from benchmark.evaluate import evaluate_run
 from benchmark.metrics import mean_std_ci
 from benchmark.report import write_report
+from benchmark.scenarios import CANONICAL_SCENARIOS, COMPONENT_FLAGS
 from benchmark.validate_dataset import validate_or_generate
 from isynkgr.icr.mapping_schema import ingest_mapping_payload
 from isynkgr.pipeline.adaptive_candidate_ranker import ADAPTERS
 
 SEEDS = [11, 23, 37]
-
-COMPONENT_FLAGS = {
-    "full_framework": {"postprocess_snap": False},
-    "rule_based_only": {"retrieval": False, "llm": False, "adaptive_selection": False},
-    "llm_only": {"rules": False, "retrieval": False},
-    "rag_only": {"rules": False, "llm": False},
-    "embedding_similarity": {"rules": False, "llm": False, "adaptive_selection": False},
-    "ablation_no_rules": {"rules": False},
-    "ablation_no_retrieval": {"retrieval": False},
-    "ablation_no_llm": {"llm": False},
-}
-
-VALID_SCENARIOS = set(COMPONENT_FLAGS)
 
 
 def _now_run_id(prefix: str) -> str:
@@ -91,7 +79,7 @@ def _synthetic_id_for_standard(standard: str, idx: int, default: str) -> str:
     if s == "OPCUA":
         return f"opcua://ns=2;s={signal.capitalize()}{idx}"
     if s == "AAS":
-        return f"aas://asset-{idx}/submodel/process/element/{signal}/value"
+        return f"aas://asset-{idx}/submodel/default/element/{signal}/value"
     if s == "IEEE1451":
         return f"ieee1451://teds{idx}/ch{idx % 4}/{signal}_value"
     if s == "IEC61499":
@@ -137,6 +125,8 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
                 "mapping_type": "no_match" if is_no_match else rec.get("mapping_type", "equivalent"),
             }
         )
+        signal_hint = source_id.rsplit("/", 2)[-2] if "/" in source_id else source_id.split("=")[-1]
+        context_id = f"asset-{i % 17}"
         rows.append(
             {
                 "id": source_id,
@@ -148,9 +138,27 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
                 "tier": tiers[i % len(tiers)],
                 "difficulty": difficulties[i % len(difficulties)],
                 "source_path": str(_source_fixture_path(source_standard, i, source_dir)),
+                "source_record": {
+                    "variable_role": "measurement" if not is_no_match else "equipment",
+                    "datatype": "FLOAT" if signal_hint.lower() not in {"state"} else "STRING",
+                    "unit": "bar" if "pressure" in signal_hint.lower() else ("C" if "temp" in signal_hint.lower() else ""),
+                    "context_entity_id": context_id,
+                    "description": (
+                        f"{signal_hint} measurement for {context_id}" if not is_no_match else f"Equipment tag {signal_hint} with no measurement evidence"
+                    ),
+                },
+                "target_candidates": [
+                    t
+                    for t in target_universe
+                    if (signal_hint.lower() in t.lower()) or (context_id in t)
+                ][:5],
                 "cardinality_contract": {"mode": "one_to_one", "grouped_1": False, "expected_count": 1},
             }
         )
+
+    for row in rows:
+        if row.get("target_path") and row["target_path"] not in row.get("target_candidates", []):
+            row.setdefault("target_candidates", []).insert(0, row["target_path"])
 
     (pair_dir / "dataset.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     (pair_dir / "ground_truth.jsonl").write_text("\n".join(json.dumps(r) for r in gt_rows) + "\n")
@@ -261,7 +269,7 @@ def run_full_workflow() -> int:
     try:
         validate_or_generate(Path("datasets/v1"))
         pairs = [tuple(pair) for pair in cfg.get("pairs", [])]
-        variants = [v["name"] for v in cfg["variants"] if v["name"] in VALID_SCENARIOS]
+        variants = [v["name"] for v in cfg["variants"] if v["name"] in CANONICAL_SCENARIOS]
         max_rows = int(os.getenv("MAX_ITEMS", str(cfg.get("items_per_standard", 120))))
         skipped_pairs: list[dict[str, str]] = []
         rows: list[dict] = []

@@ -115,6 +115,10 @@ def build_mapping_prompt(
         "8) Prefer one high-confidence mapping per source variable when possible.\n"
         "9) Prefer semantic matches: variable meaning first, then datatype/unit/context compatibility.\n"
         "10) Avoid arbitrary index-based choices when candidates are generic; choose no_match if evidence is insufficient.\n"
+        "11) Equipment labels (Pump, Motor, Line, Device) are not measurements by themselves.\n"
+        "12) Do not map generic labels to pressure/temperature/current/etc. unless explicit evidence exists in source metadata.\n"
+        "13) If multiple semantically-equivalent candidates remain unresolved by context, output mapping_type='no_match' with empty target_path.\n"
+        "14) Never invent target paths outside provided target candidates.\n"
         "Input context:\n"
         f"{json.dumps(payload, ensure_ascii=False)}"
     )

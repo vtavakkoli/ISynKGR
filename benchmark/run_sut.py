@@ -260,7 +260,8 @@ def main() -> None:
         log(f"[SAMPLE] scenario={mode} sample {idx}/{total} source={sample_path}")
         item_start = time.perf_counter()
         allow_gt_hints = str(os.getenv("ALLOW_TARGET_HINTS", "0")).strip().lower() in {"1", "true", "yes"}
-        target_candidates = list(target_universe)
+        row_candidates = [str(x).strip() for x in row.get("target_candidates", []) if str(x).strip()]
+        target_candidates = row_candidates or list(target_universe)
         if allow_gt_hints and expected_target and expected_target not in target_candidates:
             target_candidates.append(expected_target)
         result = translator.translate(

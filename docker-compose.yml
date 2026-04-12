@@ -68,7 +68,7 @@ services:
       [
         "bash",
         "-lc",
-        "set -o pipefail; python -u -m benchmark.run --scenario baseline --out results/baseline | tee results/baseline/run_scenario.log",
+        "set -o pipefail; python -u -m benchmark.run --scenario full_framework --out results/full_framework | tee results/full_framework/run_scenario.log",
       ]
     volumes:
       - ./:/app
@@ -80,7 +80,7 @@ services:
     build:
       context: .
       dockerfile: docker/sut/rule_only/Dockerfile
-    command: ["python", "-u", "-c", "from pathlib import Path; import json; from benchmark.evaluate import evaluate_run; print(json.dumps(evaluate_run(Path('results/baseline/predictions')), indent=2))"]
+    command: ["python", "-u", "-c", "from pathlib import Path; import json; from benchmark.evaluate import evaluate_run; print(json.dumps(evaluate_run(Path('results/full_framework/predictions')), indent=2))"]
     volumes:
       - ./:/app
 

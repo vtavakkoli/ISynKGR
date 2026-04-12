@@ -119,4 +119,10 @@ class RuleEngine:
         idx = int(match.group(1)) - 1000
         if idx < 0:
             return ""
-        return f"aas://aas-{idx}/submodel/default/element/value"
+        lower = source_path.lower()
+        signal = "temperature"
+        for candidate in ["pressure", "flow", "speed", "state", "vibration", "temperature"]:
+            if candidate in lower:
+                signal = candidate
+                break
+        return f"aas://asset-{idx}/submodel/default/element/{signal}/value"
