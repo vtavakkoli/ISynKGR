@@ -1,44 +1,43 @@
-# ISynKGR
+# ISynKGR Benchmark Framework
 
-ISynKGR is an industrial schema-mapping benchmark and translation framework that combines:
-- rule-based mapping,
-- retrieval-driven candidate discovery,
-- optional LLM mapping,
-- and reproducible evaluation/reporting.
+ISynKGR is a publication-oriented benchmark framework for industrial schema/path mapping across protocols (OPC UA, AAS, IEEE1451, IEC61499, ISO15926).
 
+## Purpose
+
+This repository provides one canonical benchmarking workflow that:
+- builds deterministic benchmark datasets,
+- runs scenario-based translation pipelines,
+- evaluates strict exact-match metrics,
+- exports diagnostics and reports.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    A[Source artifacts<br/>OPCUA / IEEE1451 / ISO15926] --> B[Adapters]
-    B --> C[Canonical model]
-    C --> D{Adaptive selector}
-    D -->|rules| E[Rule engine]
-    D -->|retrieval| F[Graph retrieval]
-    D -->|llm| G[LLM mapping]
-    F --> H[Candidate validation + optional snap]
-    E --> I[Merge + deduplicate]
-    G --> I
-    H --> I
-    I --> J[Output validation<br/>schema/cardinality/path]
-    J --> K[Predictions + traces]
-    K --> L[Evaluation metrics<br/>pair/tier/difficulty + strategy usage]
-    L --> M[Reports<br/>CSV + markdown + charts]
+- `benchmark/` — single active benchmark package (dataset build, orchestration, run/eval/report).
+- `isynkgr/` — translation core (adapters, retrieval, rules, ranking, prompt construction).
+- `docs/` — benchmark documentation and scenario definitions.
+
+## Official commands
+
+### Full canonical run (Docker)
+
+```bash
+docker compose up --build full-run
 ```
 
-## What the framework does
+### Full canonical run (Local Python)
 
-Given source artifacts (e.g., OPC UA / IEEE1451 / ISO15926-like inputs), ISynKGR produces mapping predictions into target standards (e.g., AAS / IEC61499-like targets), validates those predictions, and evaluates performance and failure modes.
+```bash
+PYTHONPATH=. python -m benchmark.orchestrate
+```
 
-Core modules:
-- `isynkgr/` — adapters, pipeline, retrieval, rules, validation.
-- `benchmark/` — orchestration, dataset materialization, evaluation, report generation.
-- `docs/` — scenario definitions and implementation notes.
+### Single scenario run
 
-## Scenarios
+```bash
+PYTHONPATH=. python -m benchmark.run --scenario full_framework --out results/full_framework
+```
 
-The full run executes these scenarios:
+## Canonical scenario set
+
 - `full_framework`
 - `rule_based_only`
 - `llm_only`
@@ -46,74 +45,38 @@ The full run executes these scenarios:
 - `embedding_similarity`
 - `ablation_no_rules`
 - `ablation_no_retrieval`
-- `ablation_no_graph_expansion`
 - `ablation_no_llm`
-- `ablation_no_reasoning_prompt`
-- `ablation_no_community_filter`
-- `ablation_no_parallel_retrieval`
 
-Scenario component toggles are documented in `docs/SCENARIO_MATRIX.md`.
+See `docs/SCENARIO_MATRIX.md` for the exact component toggles.
 
-## Metrics produced
+## Dataset and path conventions
 
-For each scenario/seed the pipeline exports:
-- precision / recall / f1
-- validity_pass_rate
-- transform_correctness
-- retrieval_recall_at_1, retrieval_recall_at_5
-- retrieval_hit_at_1, retrieval_hit_at_5
-- latency_per_sample_s
-- runtime_per_scenario_s
-- token_usage_prompt / token_usage_completion
-- memory_peak_mb
-- confidence_calibration_error
-- pred_count / gt_count / matched_count
+- Canonical AAS target convention: `aas://asset-<n>/submodel/default/element/<signal>/value`
+- Ground truth, generated predictions, candidate generation, and strict evaluation all use this same convention.
+- Dataset rows include semantic source metadata (`variable_role`, `datatype`, `unit`, `context_entity_id`, `description`) and deterministic `target_candidates`.
+- Explicit no-match samples are encoded with `mapping_type=no_match` and empty `target_path`.
 
-And stratified outputs:
-- per-pair
-- per-tier
-- per-difficulty
-- per-mapping-type
+## Artifact outputs
 
-Error taxonomy and validation-reason exports are written per scenario seed (`error_analysis.json`, `error_summary.json`) and aggregated in report tables.
-
-## Run the benchmark
-
-### Docker (full workflow)
-
-```bash
-docker compose up --build full-run
-```
-
-### Equivalent local Python command
-
-```bash
-PYTHONPATH=. python -m benchmark.orchestrate
-```
-
-Both execute the same top-level workflow:
-1. dataset validation/materialization,
-2. multi-scenario + multi-seed execution,
-3. evaluation,
-4. report export.
-
-## Where outputs are saved
-
-Primary artifacts:
+Per run:
 - `artifacts/run_<timestamp>/pairs/<SOURCE>__TO__<TARGET>/dataset.jsonl`
 - `artifacts/run_<timestamp>/pairs/<SOURCE>__TO__<TARGET>/ground_truth.jsonl`
 - `artifacts/run_<timestamp>/pairs/<SOURCE>__TO__<TARGET>/results/<scenario>/seed<seed>/...`
 - `artifacts/run_<timestamp>/metrics.json`
-- `artifacts/run_<timestamp>/tables/*.csv`
-- `artifacts/run_<timestamp>/plots/*.png`
 - `artifacts/run_<timestamp>/report.md`
 - `artifacts/run_<timestamp>/report.html`
 
-Per-pair convenience outputs are also mirrored under `results/<SOURCE>__TO__<TARGET>/<scenario>/seed<seed>/`.
+Convenience mirror paths are also emitted under `results/<SOURCE>__TO__<TARGET>/<scenario>/seed<seed>/`.
 
-## Reproducibility notes
+## Limitations
 
-- Seeds are fixed in the full workflow (`11, 23, 37`).
-- Scenario flags are explicit and versioned.
-- Reports are generated from exported artifacts (no manual metric editing).
-- Limitations are documented in `docs/IMPLEMENTATION_DIAGNOSIS.md`.
+- LLM-backed scenarios require a reachable Ollama endpoint.
+- Cross-protocol adapter coverage is deterministic but still synthetic-heavy.
+- Exact-match F1 is strict and sensitive to target-path formatting.
+
+## Repository cleanup and migration notes
+
+- Consolidated to one official orchestration path: `benchmark.orchestrate -> benchmark.full_workflow`.
+- Removed duplicate legacy benchmark entrypoints (`benchmark/harness.py`, `benchmark/runner.py`).
+- Removed duplicate top-level documentation file `WHY_NOT_OTHERS.md` (canonical copy remains in `docs/`).
+- Unified scenario naming and deprecated alias mapping in `benchmark/scenarios.py`.

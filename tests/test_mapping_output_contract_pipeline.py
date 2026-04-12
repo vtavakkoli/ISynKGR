@@ -87,7 +87,7 @@ def test_rule_engine_does_not_use_synthetic_opcua_id_shortcuts() -> None:
     source = CanonicalModel(standard="opcua", nodes=[CanonicalNode(id="opcua://ns=2;i=1003", type="signal", label="Pump3")], edges=[])
     mappings = RuleEngine().apply_rules(source, target_protocol="aas", target=None)
     assert mappings[0].mapping_type.value == "equivalent"
-    assert mappings[0].target_path == "aas://aas-3/submodel/default/element/value"
+    assert mappings[0].target_path == "aas://asset-3/submodel/default/element/temperature/value"
 
 
 def test_hybrid_modes_emit_schema_valid_mappings(monkeypatch):

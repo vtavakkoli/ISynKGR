@@ -1,32 +1,17 @@
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
+from benchmark.full_workflow import run_full_workflow
 from benchmark.report import generate_final_report
-
-SCENARIOS = [
-    "baseline",
-    "full_framework",
-    "ablation_no_graphrag",
-    "ablation_no_parallel",
-    "ablation_no_community",
-    "ablation_no_reasoning",
-]
-
-
-def _run(cmd: list[str], step: str) -> None:
-    print(step, flush=True)
-    proc = subprocess.run(cmd)
-    if proc.returncode != 0:
-        raise RuntimeError(f"{step} failed (exit={proc.returncode})")
 
 
 def main() -> int:
     try:
-        print("STEP 1/2: adaptive full workflow", flush=True)
-        _run([sys.executable, "-u", "-m", "benchmark.full_workflow"], " - adaptive-full-workflow")
+        print("STEP 1/2: canonical full workflow", flush=True)
+        rc = run_full_workflow()
+        if rc != 0:
+            return rc
         print("STEP 2/2: final report export", flush=True)
         final_dir = generate_final_report(Path("results"))
         report_html = Path("results/final_report.html")
@@ -39,7 +24,7 @@ def main() -> int:
         return 0
     except Exception as exc:  # noqa: BLE001
         print(f"Pipeline failed: {exc}", flush=True)
-        print("Check logs under results/<scenario>/logs/run.log", flush=True)
+        print("Check logs under results/<pair>/<scenario>/seed*/", flush=True)
         return 1
 
 

@@ -8,42 +8,27 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.error import HTTPError
 from urllib import request
+from urllib.error import HTTPError
 from urllib.parse import urlparse
 
 from benchmark.evaluate import evaluate_run
+from benchmark.scenarios import CANONICAL_SCENARIOS, DEPRECATED_SCENARIO_ALIASES, SCENARIO_RUNTIME, resolve_scenario_name
 from isynkgr.icr.mapping_schema import ingest_mapping_payload
 
-SCENARIO_SETTINGS = {
-    "baseline": {"mode": "rule_only", "component_flags": {}},
-    "full_framework": {"mode": "adaptive_candidate_ranker", "component_flags": {}},
-    "ablation_no_graphrag": {"mode": "llm_only", "component_flags": {}},
-    "ablation_no_parallel": {"mode": "rag_only", "component_flags": {}},
-    "ablation_no_community": {"mode": "graph_only", "component_flags": {}},
-    "ablation_no_reasoning": {"mode": "llm_only", "component_flags": {"postprocess_snap": False}},
-}
-
 # Backward-compatible mapping used by validation utilities/tests that import SCENARIO_MODE.
-SCENARIO_MODE = {name: settings["mode"] for name, settings in SCENARIO_SETTINGS.items()}
+SCENARIO_MODE = {name: runtime.mode for name, runtime in SCENARIO_RUNTIME.items()}
 
 
 def normalize_ollama_host(raw_host: str) -> str:
-    value = (raw_host or "").strip()
-    if not value:
-        value = "http://host.docker.internal:11434"
-
+    value = (raw_host or "").strip() or "http://host.docker.internal:11434"
     if "://" not in value:
         value = f"http://{value}"
-
     parsed = urlparse(value)
     host = parsed.hostname or "host.docker.internal"
     port = parsed.port or 11434
-
-    # 0.0.0.0 is a bind address; clients must use an actual reachable host.
     if host == "0.0.0.0":
         host = os.getenv("OLLAMA_HOST_IP", "host.docker.internal")
-
     return f"{parsed.scheme or 'http'}://{host}:{port}"
 
 
@@ -55,18 +40,14 @@ def _candidate_ollama_hosts(base_url: str) -> list[str]:
     port = parsed.port or 11434
 
     candidates: list[str] = [f"{scheme}://{host}:{port}"]
-
     host_ip = (os.getenv("OLLAMA_HOST_IP") or "").strip()
     if host_ip:
         candidates.append(f"{scheme}://{host_ip}:{port}")
-
-    # If local hostnames were provided, prefer host-routable Docker host aliases.
     if host in {"localhost", "127.0.0.1"}:
         candidates.append(f"{scheme}://host.docker.internal:{port}")
         if host_ip:
             candidates.append(f"{scheme}://{host_ip}:{port}")
 
-    # De-duplicate while preserving order.
     out: list[str] = []
     seen: set[str] = set()
     for item in candidates:
@@ -90,13 +71,11 @@ def wait_for_ollama(base_url: str, timeout_s: int = 90) -> str:
                         print(f"Ollama ready at {endpoint}.", flush=True)
                         return endpoint
             except HTTPError as exc:
-                # Some deployments lock down /api/tags but still serve /api/generate.
                 if exc.code in {401, 403, 405}:
                     print(f"Ollama reachable at {endpoint} (status={exc.code}); proceeding.", flush=True)
                     return endpoint
-                print(f"... still waiting ({endpoint}: HTTP {exc.code})", flush=True)
-            except Exception as exc:  # noqa: BLE001
-                print(f"... still waiting ({endpoint}: {exc})", flush=True)
+            except Exception:
+                pass
         time.sleep(3)
     raise RuntimeError(f"Timed out waiting for Ollama. Tried: {', '.join(candidates)}")
 
@@ -104,7 +83,7 @@ def wait_for_ollama(base_url: str, timeout_s: int = 90) -> str:
 def _git_hash() -> str:
     try:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return "unknown"
 
 
@@ -112,18 +91,18 @@ def _cardinality_contract_for_sample(gt_row: dict) -> dict:
     grouped_1 = bool(gt_row.get("grouped_1") or gt_row.get("metadata", {}).get("grouped_1"))
     mode = "grouped_1" if grouped_1 else "one_to_one"
     expected_count = int(gt_row.get("expected_count", 1 if mode == "one_to_one" else 0))
-    return {
-        "mode": mode,
-        "expected_count": expected_count,
-        "grouped_1": grouped_1,
-    }
+    return {"mode": mode, "expected_count": expected_count, "grouped_1": grouped_1}
 
 
 def run_scenario(args: argparse.Namespace) -> int:
-    scenario = args.scenario
-    scenario_cfg = SCENARIO_SETTINGS[scenario]
-    mode = scenario_cfg["mode"]
-    component_flags = scenario_cfg["component_flags"]
+    scenario, is_deprecated = resolve_scenario_name(args.scenario)
+    if is_deprecated:
+        print(f"[DEPRECATION] Scenario '{args.scenario}' is deprecated; using '{scenario}'.", flush=True)
+
+    scenario_cfg = SCENARIO_RUNTIME[scenario]
+    mode = scenario_cfg.mode
+    component_flags = scenario_cfg.component_flags
+
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = out_dir / "logs"
@@ -150,11 +129,6 @@ def run_scenario(args: argparse.Namespace) -> int:
     ]
     dataset_path.write_text("\n".join(json.dumps(r) for r in dataset_rows) + "\n")
     output_dir = Path(out_dir / "predictions")
-    print(
-        f"[SCENARIO] name={scenario} mode={mode} component_flags={component_flags} samples={dataset_items} "
-        f"dataset_path={dataset_path} gt_path={gt_path} output_path={output_dir}",
-        flush=True,
-    )
 
     header = {
         "git_commit": _git_hash(),
@@ -168,9 +142,6 @@ def run_scenario(args: argparse.Namespace) -> int:
     }
     (logs_dir / "run.log").write_text(json.dumps(header) + "\n")
     ollama_host = normalize_ollama_host(args.ollama_host)
-    resolved_args = vars(args).copy()
-    resolved_args["ollama_host"] = ollama_host
-    (out_dir / "config_resolved.json").write_text(json.dumps(resolved_args, indent=2, sort_keys=True))
 
     if mode in {"adaptive_candidate_ranker", "llm_only", "rag_only"}:
         timeout_s = int(os.getenv("OLLAMA_READY_TIMEOUT_S", "120"))
@@ -194,7 +165,6 @@ def run_scenario(args: argparse.Namespace) -> int:
         }
     )
     Path(env["OUTPUT_DIR"]).mkdir(parents=True, exist_ok=True)
-    print(f"[SCENARIO] logs_path={logs_dir / 'run.log'}", flush=True)
     with (logs_dir / "run.log").open("a") as fp:
         proc = subprocess.Popen([sys.executable, "-u", "-m", "benchmark.run_sut"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         assert proc.stdout is not None
@@ -204,19 +174,17 @@ def run_scenario(args: argparse.Namespace) -> int:
             fp.flush()
         rc = proc.wait()
     if rc != 0:
-        print(f"[SCENARIO-FAILED] name={scenario} exit={rc} logs_path={logs_dir / 'run.log'}", flush=True)
         return rc
 
     metrics = evaluate_run(Path(env["OUTPUT_DIR"]))
     metrics.update({"scenario": scenario, "model": args.model_name, "seed": args.seed, "tier": args.tier, "items": dataset_items})
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
-    print(f"[SCENARIO-DONE] name={scenario} metrics_path={out_dir / 'metrics.json'}", flush=True)
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scenario", required=True, choices=sorted(SCENARIO_SETTINGS))
+    parser.add_argument("--scenario", required=True, choices=sorted(set(CANONICAL_SCENARIOS) | set(DEPRECATED_SCENARIO_ALIASES)))
     parser.add_argument("--config", default="benchmark/config.json")
     parser.add_argument("--out", required=True)
     parser.add_argument("--ollama-host", default=os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434"))
@@ -225,11 +193,6 @@ def main() -> int:
     parser.add_argument("--max-items", type=int, default=int(os.getenv("MAX_ITEMS", "100")))
     parser.add_argument("--tier", default=os.getenv("TIER", "canonical"))
     args = parser.parse_args()
-    print(
-        f"[BANNER] service=run scenario={args.scenario} ts_utc={datetime.now(timezone.utc).isoformat()} "
-        f"model={args.model_name} seed={args.seed} tier={args.tier} item_count={args.max_items} config={args.config}",
-        flush=True,
-    )
     return run_scenario(args)
 
 

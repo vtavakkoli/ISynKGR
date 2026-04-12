@@ -16,7 +16,7 @@ class _FakeAdapter:
     def parse(self, _raw):
         return CanonicalModel(
             standard=self.standard,
-            nodes=[CanonicalNode(id="opcua://ns=2;i=1000", type="signal", label="Pump0")],
+            nodes=[CanonicalNode(id="opcua://ns=2;i=1000", type="signal", label="Temperature0")],
             edges=[],
         )
 
@@ -38,11 +38,11 @@ class _InventingLLM:
             "mappings": [
                 {
                     "source_path": "opcua://ns=2;i=1000",
-                    "target_path": "aas://asset/submodel/default/element/pressure/value",
+                    "target_path": "aas://asset/submodel/default/element/temperature/value",
                     "mapping_type": "transform",
                     "transform": {"op": "identity", "args": {}},
                     "confidence": 0.8,
-                    "rationale": "Invented path from model.",
+                    "rationale": "Invented target but same semantic variable.",
                     "evidence": [],
                 }
             ]
@@ -50,7 +50,7 @@ class _InventingLLM:
 
 
 def test_prompt_prefers_exact_target_candidates() -> None:
-    source = CanonicalModel(standard="opcua", nodes=[CanonicalNode(id="opcua://ns=2;i=1000", type="signal", label="Pump0")], edges=[])
+    source = CanonicalModel(standard="opcua", nodes=[CanonicalNode(id="opcua://ns=2;i=1000", type="signal", label="Temperature0")], edges=[])
     evidence = [
         EvidenceItem(
             id="candidate:aas://aas-0/submodel/default/element/value",
@@ -73,7 +73,7 @@ def test_prompt_prefers_exact_target_candidates() -> None:
 
 
 def test_prompt_keeps_non_benchmark_aas_candidates() -> None:
-    source = CanonicalModel(standard="opcua", nodes=[CanonicalNode(id="opcua://ns=2;i=1000", type="signal", label="Pump0")], edges=[])
+    source = CanonicalModel(standard="opcua", nodes=[CanonicalNode(id="opcua://ns=2;i=1000", type="signal", label="Temperature0")], edges=[])
     evidence = [
         EvidenceItem(
             id="candidate:bad",
