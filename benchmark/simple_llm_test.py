@@ -101,7 +101,7 @@ def run(model: str, base_url: str | None, dry_run: bool = False) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="qwen3.5:0.8b")
+    parser.add_argument("--model", default="gemma4:e2b")
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

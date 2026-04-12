@@ -102,8 +102,16 @@ def build_mapping_prompt(
         "Return JSON only and no markdown, comments, XML tags, or prose.\n"
         "Do not output hidden reasoning or thinking. Put only concise rationale/evidence text in final JSON.\n"
         "Return exactly one top-level JSON object and nothing else.\n"
+        "CRITICAL: You MUST return exactly one mapping object in the mappings array for EVERY item in the SOURCE_VARIABLES list. "
+        "The length of the output array must perfectly match the length of the input variables.\n"
         "The response MUST match this contract exactly:\n"
         f"{json.dumps(contract, ensure_ascii=False)}\n"
+        "Few-shot guardrail example:\n"
+        '{"SOURCE_VARIABLES":[{"path":"opcua://ns=2;s=Pump01","name":"Pump01","description":"equipment label only"}],'
+        '"TARGET_VARIABLES":[{"path":"aas://asset-0/submodel/default/element/temperature/value","name":"temperature"}],'
+        '"EXPECTED":{"mappings":[{"source_path":"opcua://ns=2;s=Pump01","target_path":"","mapping_type":"no_match","transform":null,"confidence":0.0,'
+        '"rationale":"Pump01 is an equipment identifier, not a measurement variable, so there is no valid measurement mapping.",'
+        '"evidence":["equipment_identifier_not_measurement"]}]}}\n'
         "Rules:\n"
         "1) mapping_type must be one of equivalent, approximate, label_match, transform, no_match.\n"
         "2) transform must be null unless mapping_type == 'transform'.\n"
