@@ -63,11 +63,12 @@ def _bar_chart(path: Path, names: list[str], values: list[float], title: str, yl
     except RuntimeError:
         _write_placeholder_png(path)
         return
-    plt.figure(figsize=(9, 4))
-    plt.bar(names, values)
+    plt.figure(figsize=(11, 5))
+    plt.bar(names, values, color="#2563eb", edgecolor="#1e3a8a", linewidth=0.6)
     plt.title(title)
     plt.ylabel(ylabel)
-    plt.xticks(rotation=30, ha="right")
+    plt.grid(axis="y", alpha=0.25, linestyle="--")
+    plt.xticks(rotation=25, ha="right")
     plt.tight_layout()
     plt.savefig(path)
     plt.close()
@@ -81,13 +82,14 @@ def _grouped_metric_chart(path: Path, names: list[str], precision: list[float], 
         return
     x = list(range(len(names)))
     width = 0.25
-    plt.figure(figsize=(10, 4.8))
-    plt.bar([i - width for i in x], precision, width=width, label="precision")
-    plt.bar(x, recall, width=width, label="recall")
-    plt.bar([i + width for i in x], f1, width=width, label="f1")
-    plt.title("Precision / Recall / F1 by Scenario")
+    plt.figure(figsize=(12, 5.2))
+    plt.bar([i - width for i in x], precision, width=width, label="precision", color="#2563eb")
+    plt.bar(x, recall, width=width, label="recall", color="#0ea5e9")
+    plt.bar([i + width for i in x], f1, width=width, label="f1", color="#16a34a")
+    plt.title("Cumulative Precision / Recall / F1 by Scenario")
     plt.ylabel("score")
-    plt.xticks(x, names, rotation=30, ha="right")
+    plt.grid(axis="y", alpha=0.25, linestyle="--")
+    plt.xticks(x, names, rotation=20, ha="right")
     plt.ylim(0.0, 1.05)
     plt.legend()
     plt.tight_layout()
@@ -119,16 +121,18 @@ def _scatter_quality_latency_chart(path: Path, rows: list[dict]) -> None:
     if not rows:
         _write_placeholder_png(path)
         return
-    x = [float(r.get("latency_per_sample_s", 0.0)) for r in rows]
-    y = [float(r.get("f1", 0.0)) for r in rows]
-    labels = [_scenario_name(r) for r in rows]
-    plt.figure(figsize=(9, 4.8))
-    plt.scatter(x, y, alpha=0.8)
+    x = [float(r.get("latency_mean", 0.0)) for r in rows]
+    y = [float(r.get("f1_mean", 0.0)) for r in rows]
+    labels = [str(r.get("scenario", "unknown")) for r in rows]
+    marker_sizes = [60 + 20 * int(r.get("runs", 1)) for r in rows]
+    plt.figure(figsize=(11, 5.2))
+    plt.scatter(x, y, alpha=0.9, color="#2563eb", s=marker_sizes, edgecolors="#1e3a8a", linewidth=0.6)
     for idx, label in enumerate(labels):
-        plt.annotate(label, (x[idx], y[idx]), textcoords="offset points", xytext=(4, 4), fontsize=7)
-    plt.title("Quality vs Latency (per run)")
+        plt.annotate(label, (x[idx], y[idx]), textcoords="offset points", xytext=(5, 5), fontsize=8)
+    plt.title("Cumulative Quality vs Latency by Scenario")
     plt.xlabel("latency_per_sample_s")
-    plt.ylabel("f1")
+    plt.ylabel("f1_mean")
+    plt.grid(alpha=0.25, linestyle="--")
     plt.ylim(0.0, 1.05)
     plt.tight_layout()
     plt.savefig(path)
@@ -164,8 +168,15 @@ def _scenario_workflow(scenario: str) -> str:
 
 def _scenario_type(scenario: str) -> str:
     key = scenario.lower()
+    ablation_breakdown = {
+        "ablation_no_retrieval": "ablation_no_retrieval",
+        "ablation_no_rules": "ablation_no_rules",
+        "ablation_no_llm": "ablation_no_llm",
+    }
+    if key in ablation_breakdown:
+        return ablation_breakdown[key]
     if key.startswith("ablation_"):
-        return "ablation"
+        return "ablation_other"
     if "hybrid" in key or "adaptive" in key or "full" in key:
         return "hybrid"
     if "rule" in key:
@@ -495,6 +506,14 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
     ]
     (run_dir / "report.md").write_text("\n".join(md))
 
+    rows_by_grouped_scenario: dict[str, list[dict]] = {}
+    for row in rows:
+        rows_by_grouped_scenario.setdefault(_scenario_baseline(row), []).append(row)
+
+    def _grouped_mean(scenario: str, key: str) -> float:
+        values = [float(item.get(key, 0.0)) for item in rows_by_grouped_scenario.get(scenario, [])]
+        return fmean(values) if values else 0.0
+
     names = [r["scenario"] for r in aggregated_rows]
     _bar_chart(plots_dir / "f1_by_scenario.png", names, [r["f1_mean"] for r in aggregated_rows], "F1 by Scenario (mean)", "f1")
     _bar_chart(
@@ -514,18 +533,12 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
     )
     _grouped_metric_chart(
         plots_dir / "precision_recall_f1_by_scenario.png",
-        [r["scenario"] for r in aggregated_rows],
-        [
-            float(sum(x.get("precision", 0.0) for x in rows if _scenario_name(x) == r["scenario"]) / max(1, sum(1 for x in rows if _scenario_name(x) == r["scenario"])))
-            for r in aggregated_rows
-        ],
-        [
-            float(sum(x.get("recall", 0.0) for x in rows if _scenario_name(x) == r["scenario"]) / max(1, sum(1 for x in rows if _scenario_name(x) == r["scenario"])))
-            for r in aggregated_rows
-        ],
-        [r["f1_mean"] for r in aggregated_rows],
+        [r["scenario"] for r in scenario_grouped_rows],
+        [_grouped_mean(r["scenario"], "precision") for r in scenario_grouped_rows],
+        [_grouped_mean(r["scenario"], "recall") for r in scenario_grouped_rows],
+        [r["f1_mean"] for r in scenario_grouped_rows],
     )
-    _scatter_quality_latency_chart(plots_dir / "quality_vs_latency_scatter.png", rows)
+    _scatter_quality_latency_chart(plots_dir / "quality_vs_latency_scatter.png", scenario_grouped_rows)
     _bar_chart(
         plots_dir / "cost_vs_performance.png",
         [r["scenario"] for r in aggregated_rows],
@@ -542,9 +555,9 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
     )
     _bar_chart(
         plots_dir / "retrieval_recall_by_scenario.png",
-        [r["scenario"] for r in aggregated_rows],
-        [float(sum(x.get("retrieval_recall_at_5", 0.0) for x in rows if _scenario_name(x) == r["scenario"]) / max(1, sum(1 for x in rows if _scenario_name(x) == r["scenario"]))) for r in aggregated_rows],
-        "Retrieval Recall@5 by Scenario",
+        [r["scenario"] for r in scenario_grouped_rows],
+        [_grouped_mean(r["scenario"], "retrieval_recall_at_5") for r in scenario_grouped_rows],
+        "Cumulative Retrieval Recall@5 by Scenario",
         "recall@5",
     )
     _bar_chart(
