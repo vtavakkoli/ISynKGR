@@ -3,10 +3,12 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from benchmark.evaluate import evaluate_run
 from benchmark.metrics import mean_std_ci
@@ -61,31 +63,122 @@ def _source_fixture_path(source_standard: str, idx: int, source_dir: Path) -> Pa
     if src == "AAS":
         return Path("datasets/v1/aas/synthetic") / f"aas_{idx % 100:03d}.json"
     source_file = source_dir / f"sample_{idx:04d}_{src.lower()}.json"
-    payload = {
-        "standard": src,
-        "classes": [{"id": f"tag_{idx}", "label": "Temperature"}],
-        "relations": [{"source": f"tag_{idx}", "target": f"tag_{idx}_value", "type": "hasValue"}],
-        "teds": [{"id": f"teds_{idx}", "name": "SensorTEDS", "channels": [{"id": "ch0", "dtype": "FLOAT", "unit": "C"}]}],
-        "devices": [{"id": f"dev_{idx}", "resources": [{"id": "res1"}]}],
-    }
+    payload = {"standard": src}
+    if src == "IEC61499":
+        payload |= {
+            "devices": [
+                {
+                    "id": "Device0",
+                    "name": "MainDevice",
+                    "resources": [
+                        {
+                            "id": "Res1",
+                            "name": "Resource1",
+                            "function_blocks": [
+                                {
+                                    "id": "FB1",
+                                    "name": "TelemetryFB",
+                                    "type": "Telemetry",
+                                    "inputs": [
+                                        {"id": "SetPoint", "dtype": "FLOAT", "unit": "C", "range": {"min": -20, "max": 120}}
+                                    ],
+                                    "outputs": [
+                                        {"id": "Pressure0", "name": "Pressure0", "dtype": "FLOAT", "unit": "bar", "range": {"min": 0, "max": 25}},
+                                        {"id": "PumpState", "name": "PumpState", "dtype": "STRING"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    elif src == "IEEE1451":
+        payload |= {
+            "teds": [
+                {
+                    "id": "teds0",
+                    "name": "SensorTEDS",
+                    "channels": [
+                        {"id": "Channel0", "name": "Measurement", "dtype": "FLOAT", "unit": "bar", "range": {"min": 0, "max": 25}},
+                        {"id": "Channel1", "name": "PumpState", "dtype": "STRING"},
+                    ],
+                }
+            ]
+        }
+    else:
+        payload |= {
+            "classes": [{"id": "Class0", "label": "Pressure0"}],
+            "relations": [{"source": "Class0", "target": "Class0Value", "type": "hasValue"}],
+        }
     source_file.write_text(json.dumps(payload))
     return source_file
 
 
-def _synthetic_id_for_standard(standard: str, idx: int, default: str) -> str:
-    semantic_signals = ["temperature", "pressure", "flow", "speed", "state", "vibration"]
-    signal = semantic_signals[idx % len(semantic_signals)]
+def _peek_opcua_variable(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        root = ET.fromstring(path.read_text())
+    except Exception:
+        return None
+    for elem in root.iter():
+        if elem.tag.split("}")[-1] != "UAVariable":
+            continue
+        browse_name = elem.attrib.get("BrowseName", "")
+        if browse_name:
+            _, _, name = browse_name.partition(":")
+            return name or browse_name
+    return None
+
+
+def _peek_aas_element(path: Path) -> tuple[str | None, str | None]:
+    if not path.exists():
+        return None, None
+    try:
+        doc = json.loads(path.read_text())
+    except Exception:
+        return None, None
+    for sm in doc.get("submodels", []):
+        sid = sm.get("id", "default")
+        for elem in sm.get("submodelElements", []):
+            eid = elem.get("idShort")
+            if eid:
+                return sid, eid
+    return None, None
+
+
+def _normalize_signal_hint(signal: str | None, idx: int) -> str:
+    if not signal:
+        return f"signal{idx}"
+    lowered = signal.lower()
+    for token in ("temperature", "pressure", "flow", "speed", "state", "vibration"):
+        if token in lowered:
+            return token
+    return re.sub(r"\d+$", "", lowered) or lowered
+
+
+def _synthetic_id_for_standard(standard: str, idx: int, default: str, source_path: Path | None = None, signal_hint: str | None = None) -> str:
+    signal = _normalize_signal_hint(signal_hint, idx)
     s = standard.upper()
     if s == "OPCUA":
+        raw_name = _peek_opcua_variable(source_path) if source_path else None
+        if raw_name:
+            return f"opcua://ns=2;s={raw_name}"
         return f"opcua://ns=2;s={signal.capitalize()}{idx}"
     if s == "AAS":
-        return f"aas://asset-{idx}/submodel/default/element/{signal}/value"
+        submodel_id, element_id = _peek_aas_element(source_path) if source_path else (None, None)
+        if element_id:
+            return f"aas://{submodel_id or f'sm-{idx}'}/submodel/default/element/{element_id}"
+        return f"aas://sm-{idx}/submodel/default/element/{signal}"
     if s == "IEEE1451":
-        return f"ieee1451://teds{idx}/ch{idx % 4}/{signal}_value"
+        channel_id = "Channel1" if signal == "state" else "Channel0"
+        return f"ieee1451://teds0/{channel_id}/value"
     if s == "IEC61499":
-        return f"iec61499://Device{idx}/Res1/FB1/{signal.upper()}_OUT"
+        variable_id = "PumpState" if signal == "state" else "Pressure0"
+        return f"iec61499://Device0/Res1/FB1/{variable_id}"
     if s == "ISO15926":
-        return f"iso15926://class/{idx}"
+        return f"iso15926://class/Class{idx}"
     return default
 
 
@@ -107,8 +200,15 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
         if not line.strip():
             continue
         rec = ingest_mapping_payload(json.loads(line), migrate_legacy=True).model_dump()
-        source_id = _synthetic_id_for_standard(source_standard, i, rec["source_path"])
-        target_id = _synthetic_id_for_standard(target_standard, i, rec["target_path"])
+        source_fixture = _source_fixture_path(source_standard, i, source_dir)
+        if source_standard.upper() == "OPCUA":
+            source_signal_hint = _peek_opcua_variable(source_fixture)
+        elif source_standard.upper() == "AAS":
+            _, source_signal_hint = _peek_aas_element(source_fixture)
+        else:
+            source_signal_hint = None
+        source_id = _synthetic_id_for_standard(source_standard, i, rec["source_path"], source_fixture, source_signal_hint)
+        target_id = _synthetic_id_for_standard(target_standard, i, rec["target_path"], None, source_signal_hint)
         if target_id and target_id not in seen_targets:
             seen_targets.add(target_id)
             target_universe.append(target_id)
@@ -122,7 +222,7 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
                 "mapping_type": rec.get("mapping_type", "equivalent"),
             }
         )
-        signal_hint = source_id.rsplit("/", 2)[-2] if "/" in source_id else source_id.split("=")[-1]
+        signal_hint = source_signal_hint or (source_id.rsplit("/", 1)[-1] if "/" in source_id else source_id.split("=")[-1])
         context_id = f"asset-{i % 17}"
         rows.append(
             {
@@ -134,7 +234,7 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
                 "pair": f"{source_standard}->{target_standard}",
                 "tier": tiers[i % len(tiers)],
                 "difficulty": difficulties[i % len(difficulties)],
-                "source_path": str(_source_fixture_path(source_standard, i, source_dir)),
+                "source_path": str(source_fixture),
                 "source_record": {
                     "variable_role": "measurement",
                     "datatype": "FLOAT" if signal_hint.lower() not in {"state"} else "STRING",
