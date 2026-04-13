@@ -15,11 +15,11 @@ def main() -> int:
         print("STEP 2/2: final report export", flush=True)
         final_dir = generate_final_report(Path("results"))
         report_html = Path("results/final_report.html")
-        latest_artifacts = sorted(Path("artifacts").glob("run_*"))
-        if latest_artifacts:
-            src = latest_artifacts[-1] / "report.html"
-            if src.exists():
-                report_html.write_text(src.read_text())
+        src = final_dir / "report.html"
+        if src.exists():
+            # final_report.html is written under results/ while plots are under
+            # results/final/plots, so rewrite image paths for portability.
+            report_html.write_text(src.read_text().replace('src="plots/', 'src="final/plots/'))
         print(f"Final report generated at {final_dir} and {report_html}", flush=True)
         return 0
     except Exception as exc:  # noqa: BLE001

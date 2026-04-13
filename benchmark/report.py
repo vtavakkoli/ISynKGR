@@ -21,6 +21,23 @@ def _markdown_table(rows: list[dict], columns: list[str]) -> str:
     return "\n".join([header, sep, *body])
 
 
+def _html_table(rows: list[dict], columns: list[str]) -> str:
+    head = "".join(f"<th style=\"padding:6px 10px;border:1px solid #ddd\">{html.escape(col)}</th>" for col in columns)
+    body_rows: list[str] = []
+    for row in rows:
+        cols = "".join(
+            f"<td style=\"padding:6px 10px;border:1px solid #ddd\">{html.escape(str(row.get(col, '')))}</td>"
+            for col in columns
+        )
+        body_rows.append(f"<tr>{cols}</tr>")
+    return (
+        "<table style=\"border-collapse:collapse;border:1px solid #ddd\">"
+        f"<thead><tr>{head}</tr></thead>"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+    )
+
+
 def _import_matplotlib_pyplot():
     try:
         import matplotlib.pyplot as plt  # type: ignore
@@ -53,10 +70,63 @@ def _bar_chart(path: Path, names: list[str], values: list[float], title: str, yl
     plt.close()
 
 
+def _grouped_metric_chart(path: Path, names: list[str], precision: list[float], recall: list[float], f1: list[float]) -> None:
+    try:
+        plt = _import_matplotlib_pyplot()
+    except RuntimeError:
+        _write_placeholder_png(path)
+        return
+    x = list(range(len(names)))
+    width = 0.25
+    plt.figure(figsize=(10, 4.8))
+    plt.bar([i - width for i in x], precision, width=width, label="precision")
+    plt.bar(x, recall, width=width, label="recall")
+    plt.bar([i + width for i in x], f1, width=width, label="f1")
+    plt.title("Precision / Recall / F1 by Scenario")
+    plt.ylabel("score")
+    plt.xticks(x, names, rotation=30, ha="right")
+    plt.ylim(0.0, 1.05)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(path)
+    plt.close()
+
+
+def _scatter_quality_latency_chart(path: Path, rows: list[dict]) -> None:
+    try:
+        plt = _import_matplotlib_pyplot()
+    except RuntimeError:
+        _write_placeholder_png(path)
+        return
+    if not rows:
+        _write_placeholder_png(path)
+        return
+    x = [float(r.get("latency_per_sample_s", 0.0)) for r in rows]
+    y = [float(r.get("f1", 0.0)) for r in rows]
+    labels = [_scenario_name(r) for r in rows]
+    plt.figure(figsize=(9, 4.8))
+    plt.scatter(x, y, alpha=0.8)
+    for idx, label in enumerate(labels):
+        plt.annotate(label, (x[idx], y[idx]), textcoords="offset points", xytext=(4, 4), fontsize=7)
+    plt.title("Quality vs Latency (per run)")
+    plt.xlabel("latency_per_sample_s")
+    plt.ylabel("f1")
+    plt.ylim(0.0, 1.05)
+    plt.tight_layout()
+    plt.savefig(path)
+    plt.close()
+
+
 def _scenario_name(row: dict) -> str:
     pair = str(row.get("pair") or "").strip()
-    scenario = str(row.get("baseline") or row.get("scenario") or "")
-    return f"{pair}::{scenario}" if pair else scenario
+    scenario = str(row.get("baseline") or row.get("scenario") or row.get("variant") or "").strip()
+    if pair and scenario:
+        return f"{pair}::{scenario}"
+    if scenario:
+        return scenario
+    if pair:
+        return f"{pair}::default"
+    return "unknown"
 
 
 def _aggregate_rows(rows: list[dict]) -> list[dict]:
@@ -96,14 +166,11 @@ def _aggregate_violations(rows: list[dict]) -> dict[str, int]:
 
 
 def _build_validity_breakdown(violations: dict[str, int]) -> list[dict]:
+    if not violations:
+        return [{"reason": "none", "count": 0}]
     return [
-        {"reason": "mapping_type_invalid", "count": int(violations.get("mapping_type_invalid", 0))},
-        {"reason": "target_id_format", "count": int(violations.get("target_id_format", 0))},
-        {
-            "reason": "target_validator_errors",
-            "count": int(sum(v for k, v in violations.items() if str(k).startswith("target_"))),
-        },
-        {"reason": "confidence_low", "count": int(violations.get("confidence_low", 0))},
+        {"reason": str(reason), "count": int(count)}
+        for reason, count in sorted(violations.items(), key=lambda kv: kv[1], reverse=True)
     ]
 
 
@@ -136,7 +203,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 
     summary_rows = [
         {
-            "scenario": r["scenario"],
+            "scenario": r["scenario"].split("::", 1)[1] if "::" in r["scenario"] else r["scenario"],
             "pair": r["scenario"].split("::", 1)[0] if "::" in r["scenario"] else "aggregate",
             "f1": _fmt(r["f1"]),
             "validity_pass_rate": _fmt(r["validity_pass_rate"]),
@@ -237,6 +304,8 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "- `plots/f1_by_scenario.png`",
         "- `plots/validity_by_scenario.png`",
         "- `plots/top_violations.png`",
+        "- `plots/precision_recall_f1_by_scenario.png`",
+        "- `plots/quality_vs_latency_scatter.png`",
         "- `plots/latency_by_scenario.png`",
         "- `plots/retrieval_recall_by_scenario.png`",
         "",
@@ -264,6 +333,20 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "Top Violations",
         "count",
     )
+    _grouped_metric_chart(
+        plots_dir / "precision_recall_f1_by_scenario.png",
+        [r["scenario"] for r in aggregated_rows],
+        [
+            float(sum(x.get("precision", 0.0) for x in rows if _scenario_name(x) == r["scenario"]) / max(1, sum(1 for x in rows if _scenario_name(x) == r["scenario"])))
+            for r in aggregated_rows
+        ],
+        [
+            float(sum(x.get("recall", 0.0) for x in rows if _scenario_name(x) == r["scenario"]) / max(1, sum(1 for x in rows if _scenario_name(x) == r["scenario"])))
+            for r in aggregated_rows
+        ],
+        [r["f1_mean"] for r in aggregated_rows],
+    )
+    _scatter_quality_latency_chart(plots_dir / "quality_vs_latency_scatter.png", rows)
     _bar_chart(
         plots_dir / "cost_vs_performance.png",
         [r["scenario"] for r in aggregated_rows],
@@ -286,14 +369,14 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "recall@5",
     )
 
-    summary_table = html.escape(_markdown_table(summary_rows, ["scenario", "f1", "validity_pass_rate"]))
+    summary_table_html = _html_table(summary_rows, ["pair", "scenario", "f1", "validity_pass_rate"])
     validity_table = html.escape(_markdown_table(validity_breakdown, ["reason", "count"]))
     raw_json = html.escape(json.dumps(report_payload, indent=2))
     html_content = f"""<html><body style="font-family:Arial,sans-serif;margin:24px">
 <h1>ISynKGR Benchmark Report</h1>
 <p>Canonical metric keys consumed from evaluator: <code>precision</code>, <code>recall</code>, <code>f1</code>, <code>validity_pass_rate</code>, <code>violation_counts</code>.</p>
 <h2>Summary table (F1 + validity)</h2>
-<pre>{summary_table}</pre>
+{summary_table_html}
 <h2>Why validity is low</h2>
 <pre>{validity_table}</pre>
 <h2>Plots</h2>
@@ -301,6 +384,8 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 <li><img alt="F1 by scenario" src="plots/f1_by_scenario.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Validity by scenario" src="plots/validity_by_scenario.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Top violations" src="plots/top_violations.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="Precision, recall, F1 by scenario" src="plots/precision_recall_f1_by_scenario.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="Quality vs latency scatter" src="plots/quality_vs_latency_scatter.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Cost vs performance" src="plots/cost_vs_performance.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Latency by scenario" src="plots/latency_by_scenario.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Retrieval recall by scenario" src="plots/retrieval_recall_by_scenario.png" style="max-width:100%;height:auto" /></li>
@@ -315,13 +400,29 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 
 
 def generate_final_report(results_root: Path = Path("results")) -> Path:
+    def _enrich_from_path(row: dict, metrics_path: Path) -> dict:
+        enriched = dict(row)
+        rel_parts = metrics_path.relative_to(results_root).parts
+        # Common layout: results/<PAIR>/<SCENARIO>/seed*/metrics.json
+        if len(rel_parts) >= 4:
+            enriched.setdefault("pair", str(enriched.get("pair") or rel_parts[-4]))
+            enriched.setdefault("baseline", str(enriched.get("baseline") or rel_parts[-3]))
+        return enriched
+
     rows = []
     for metrics_path in results_root.glob("**/metrics.json"):
         payload = json.loads(metrics_path.read_text())
         if isinstance(payload, list):
-            rows.extend([row for row in payload if isinstance(row, dict)])
+            for row in payload:
+                if not isinstance(row, dict):
+                    continue
+                enriched = _enrich_from_path(row, metrics_path)
+                if _scenario_name(enriched) != "unknown":
+                    rows.append(enriched)
         elif isinstance(payload, dict):
-            rows.append(payload)
+            enriched = _enrich_from_path(payload, metrics_path)
+            if _scenario_name(enriched) != "unknown":
+                rows.append(enriched)
 
     final_dir = results_root / "final"
     write_report(final_dir, rows)
