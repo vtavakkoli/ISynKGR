@@ -5,7 +5,7 @@
 |---|---|---|---|---|
 |rule_only|1.000|0.100|0.182|1.000|
 |graph_only|1.000|0.100|0.182|1.000|
-|isynkgr_hybrid|1.000|0.100|0.182|1.000|
+|full framework|1.000|0.100|0.182|1.000|
 |rag_only|1.000|0.100|0.182|1.000|
 |llm_only|1.000|0.100|0.182|1.000|
 
@@ -14,7 +14,7 @@
 |---|---|---|
 |rule_only|1.000|0.182|
 |graph_only|1.000|0.182|
-|isynkgr_hybrid|1.000|0.182|
+|full framework|1.000|0.182|
 |rag_only|1.000|0.182|
 |llm_only|1.000|0.182|
 
@@ -48,7 +48,7 @@
     "f1": 0.18181818181818182,
     "validity_pass_rate": 1.0,
     "violation_counts": {},
-    "baseline": "isynkgr_hybrid"
+    "baseline": "full framework"
   },
   {
     "precision": 1.0,
