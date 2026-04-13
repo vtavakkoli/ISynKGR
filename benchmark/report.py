@@ -119,8 +119,14 @@ def _scatter_quality_latency_chart(path: Path, rows: list[dict]) -> None:
 
 def _scenario_name(row: dict) -> str:
     pair = str(row.get("pair") or "").strip()
-    scenario = str(row.get("baseline") or row.get("scenario") or "")
-    return f"{pair}::{scenario}" if pair else scenario
+    scenario = str(row.get("baseline") or row.get("scenario") or row.get("variant") or "").strip()
+    if pair and scenario:
+        return f"{pair}::{scenario}"
+    if scenario:
+        return scenario
+    if pair:
+        return f"{pair}::default"
+    return "unknown"
 
 
 def _aggregate_rows(rows: list[dict]) -> list[dict]:
@@ -160,14 +166,11 @@ def _aggregate_violations(rows: list[dict]) -> dict[str, int]:
 
 
 def _build_validity_breakdown(violations: dict[str, int]) -> list[dict]:
+    if not violations:
+        return [{"reason": "none", "count": 0}]
     return [
-        {"reason": "mapping_type_invalid", "count": int(violations.get("mapping_type_invalid", 0))},
-        {"reason": "target_id_format", "count": int(violations.get("target_id_format", 0))},
-        {
-            "reason": "target_validator_errors",
-            "count": int(sum(v for k, v in violations.items() if str(k).startswith("target_"))),
-        },
-        {"reason": "confidence_low", "count": int(violations.get("confidence_low", 0))},
+        {"reason": str(reason), "count": int(count)}
+        for reason, count in sorted(violations.items(), key=lambda kv: kv[1], reverse=True)
     ]
 
 
@@ -200,7 +203,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 
     summary_rows = [
         {
-            "scenario": r["scenario"],
+            "scenario": r["scenario"].split("::", 1)[1] if "::" in r["scenario"] else r["scenario"],
             "pair": r["scenario"].split("::", 1)[0] if "::" in r["scenario"] else "aggregate",
             "f1": _fmt(r["f1"]),
             "validity_pass_rate": _fmt(r["validity_pass_rate"]),
@@ -397,13 +400,29 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 
 
 def generate_final_report(results_root: Path = Path("results")) -> Path:
+    def _enrich_from_path(row: dict, metrics_path: Path) -> dict:
+        enriched = dict(row)
+        rel_parts = metrics_path.relative_to(results_root).parts
+        # Common layout: results/<PAIR>/<SCENARIO>/seed*/metrics.json
+        if len(rel_parts) >= 4:
+            enriched.setdefault("pair", str(enriched.get("pair") or rel_parts[-4]))
+            enriched.setdefault("baseline", str(enriched.get("baseline") or rel_parts[-3]))
+        return enriched
+
     rows = []
     for metrics_path in results_root.glob("**/metrics.json"):
         payload = json.loads(metrics_path.read_text())
         if isinstance(payload, list):
-            rows.extend([row for row in payload if isinstance(row, dict)])
+            for row in payload:
+                if not isinstance(row, dict):
+                    continue
+                enriched = _enrich_from_path(row, metrics_path)
+                if _scenario_name(enriched) != "unknown":
+                    rows.append(enriched)
         elif isinstance(payload, dict):
-            rows.append(payload)
+            enriched = _enrich_from_path(payload, metrics_path)
+            if _scenario_name(enriched) != "unknown":
+                rows.append(enriched)
 
     final_dir = results_root / "final"
     write_report(final_dir, rows)
