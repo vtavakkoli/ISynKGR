@@ -5,6 +5,8 @@ import json
 import csv
 from pathlib import Path
 
+from benchmark.scenarios import COMPONENT_FLAGS
+
 CANONICAL_METRIC_KEYS = ("precision", "recall", "f1", "validity_pass_rate", "violation_counts")
 
 
@@ -129,6 +131,21 @@ def _scenario_name(row: dict) -> str:
     return "unknown"
 
 
+def _scenario_baseline(row: dict) -> str:
+    scenario = str(row.get("baseline") or row.get("scenario") or row.get("variant") or "").strip()
+    if scenario and "::" in scenario:
+        return scenario.split("::", 1)[1]
+    return scenario or "unknown"
+
+
+def _scenario_workflow(scenario: str) -> str:
+    flags = COMPONENT_FLAGS.get(scenario, {})
+    disabled = sorted(k for k, enabled in flags.items() if enabled is False)
+    if not disabled:
+        return "All major components enabled"
+    return "Disabled: " + ", ".join(disabled)
+
+
 def _aggregate_rows(rows: list[dict]) -> list[dict]:
     buckets: dict[str, list[dict]] = {}
     for row in rows:
@@ -147,6 +164,33 @@ def _aggregate_rows(rows: list[dict]) -> list[dict]:
                 "f1_std": (sum((x - (sum(f1_values) / max(len(f1_values), 1))) ** 2 for x in f1_values) / max(len(f1_values), 1)) ** 0.5 if f1_values else 0.0,
                 "validity_mean": sum(validity_values) / max(len(validity_values), 1),
                 "validity_std": (sum((x - (sum(validity_values) / max(len(validity_values), 1))) ** 2 for x in validity_values) / max(len(validity_values), 1)) ** 0.5 if validity_values else 0.0,
+            }
+        )
+    return sorted(aggregated, key=lambda r: r["f1_mean"], reverse=True)
+
+
+def _aggregate_rows_by_scenario(rows: list[dict]) -> list[dict]:
+    buckets: dict[str, list[dict]] = {}
+    for row in rows:
+        buckets.setdefault(_scenario_baseline(row), []).append(row)
+
+    aggregated: list[dict] = []
+    for scenario, items in buckets.items():
+        f1_values = [float(i.get("f1", 0.0)) for i in items]
+        validity_values = [float(i.get("validity_pass_rate", 0.0)) for i in items]
+        pair_set = sorted({str(i.get("pair", "aggregate")) for i in items})
+        mean_f1 = sum(f1_values) / max(len(f1_values), 1)
+        mean_validity = sum(validity_values) / max(len(validity_values), 1)
+        aggregated.append(
+            {
+                "scenario": scenario,
+                "workflow": _scenario_workflow(scenario),
+                "pairs_covered": ", ".join(pair_set),
+                "runs": len(items),
+                "f1_mean": mean_f1,
+                "f1_std": (sum((x - mean_f1) ** 2 for x in f1_values) / max(len(f1_values), 1)) ** 0.5 if f1_values else 0.0,
+                "validity_mean": mean_validity,
+                "validity_std": (sum((x - mean_validity) ** 2 for x in validity_values) / max(len(validity_values), 1)) ** 0.5 if validity_values else 0.0,
             }
         )
     return sorted(aggregated, key=lambda r: r["f1_mean"], reverse=True)
@@ -194,6 +238,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 
     ranked_f1 = sorted(canonical_rows, key=lambda r: r["f1"], reverse=True)
     aggregated_rows = _aggregate_rows(rows)
+    scenario_grouped_rows = _aggregate_rows_by_scenario(rows)
     violations = _aggregate_violations(canonical_rows)
     violation_rows = [
         {"violation_type": k, "count": v}
@@ -215,6 +260,7 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "canonical_metric_keys": list(CANONICAL_METRIC_KEYS),
         "summary_table": summary_rows,
         "aggregated_scenario_summary": aggregated_rows,
+        "scenario_grouped_summary": scenario_grouped_rows,
         "why_validity_low": validity_breakdown,
         "top_violations": violation_rows,
         "scenarios": canonical_rows,
@@ -269,6 +315,22 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "## Main results",
         _markdown_table(summary_rows, ["pair", "scenario", "f1", "validity_pass_rate"]),
         "",
+        "## Scenario grouped summary (all pairs/seeds)",
+        _markdown_table(
+            [
+                {
+                    "scenario": r["scenario"],
+                    "workflow": r["workflow"],
+                    "pairs_covered": r["pairs_covered"],
+                    "runs": r["runs"],
+                    "f1_mean": _fmt(r["f1_mean"]),
+                    "validity_mean": _fmt(r["validity_mean"]),
+                }
+                for r in scenario_grouped_rows
+            ],
+            ["scenario", "workflow", "pairs_covered", "runs", "f1_mean", "validity_mean"],
+        ),
+        "",
         "## Aggregated per-scenario summary (mean/std across seeds)",
         _markdown_table(
             [
@@ -308,6 +370,8 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "- `plots/quality_vs_latency_scatter.png`",
         "- `plots/latency_by_scenario.png`",
         "- `plots/retrieval_recall_by_scenario.png`",
+        "- `plots/f1_by_scenario_grouped.png`",
+        "- `plots/validity_by_scenario_grouped.png`",
         "",
         "## Raw JSON details",
         "```json",
@@ -368,6 +432,20 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
         "Retrieval Recall@5 by Scenario",
         "recall@5",
     )
+    _bar_chart(
+        plots_dir / "f1_by_scenario_grouped.png",
+        [r["scenario"] for r in scenario_grouped_rows],
+        [r["f1_mean"] for r in scenario_grouped_rows],
+        "F1 by Scenario (grouped across pairs)",
+        "f1",
+    )
+    _bar_chart(
+        plots_dir / "validity_by_scenario_grouped.png",
+        [r["scenario"] for r in scenario_grouped_rows],
+        [r["validity_mean"] for r in scenario_grouped_rows],
+        "Validity by Scenario (grouped across pairs)",
+        "validity_pass_rate",
+    )
 
     summary_table_html = _html_table(summary_rows, ["pair", "scenario", "f1", "validity_pass_rate"])
     validity_table = html.escape(_markdown_table(validity_breakdown, ["reason", "count"]))
@@ -389,6 +467,8 @@ def write_report(run_dir: Path, rows: list[dict]) -> None:
 <li><img alt="Cost vs performance" src="plots/cost_vs_performance.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Latency by scenario" src="plots/latency_by_scenario.png" style="max-width:100%;height:auto" /></li>
 <li><img alt="Retrieval recall by scenario" src="plots/retrieval_recall_by_scenario.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="F1 by scenario grouped across pairs" src="plots/f1_by_scenario_grouped.png" style="max-width:100%;height:auto" /></li>
+<li><img alt="Validity by scenario grouped across pairs" src="plots/validity_by_scenario_grouped.png" style="max-width:100%;height:auto" /></li>
 </ul>
 <h2>Raw JSON details</h2>
 <details>

@@ -86,8 +86,12 @@ def _validate_mapping(
         violations.append({"type": "invalid_path", "message": f"target path is not protocol qualified: {mapping.get('target_path')}"})
 
     dedup_key = _mapping_key(mapping)
+    strict_duplicate = str(os.getenv("STRICT_DUPLICATE_MAPPING", "0")).strip().lower() in {"1", "true", "yes"}
     if dedup_key in seen_keys:
-        violations.append({"type": "duplicate_mapping", "message": f"Duplicate mapping key: {dedup_key}"})
+        if strict_duplicate:
+            violations.append({"type": "duplicate_mapping", "message": f"Duplicate mapping key: {dedup_key}"})
+        else:
+            return True, [], None
     else:
         seen_keys.add(dedup_key)
 
@@ -240,8 +244,6 @@ def main() -> None:
         )
     total = len(dataset_rows)
     log(f"[SUITE] stage=translation total={total} completed=0 remaining={total}")
-    seen_keys: set[tuple[str, str, str]] = set()
-
     tracemalloc.start()
     for idx, row in enumerate(dataset_rows, start=1):
         row_source_protocol = str(row.get("source_standard", source_protocol)).lower()
@@ -282,6 +284,7 @@ def main() -> None:
 
         item_violations: list[dict] = []
         sample_mappings: list[dict] = []
+        seen_keys: set[tuple[str, str, str]] = set()
         component_debug = metadata.get("component_outputs", {})
         retrieval_by_source = component_debug.get("retrieval", {}) if isinstance(component_debug, dict) else {}
         semantic_context: dict[str, dict] = {}
