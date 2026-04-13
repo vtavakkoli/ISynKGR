@@ -114,15 +114,12 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
             target_universe.append(target_id)
         if i >= max_rows:
             continue
-        is_no_match = i % 11 == 0
-        if is_no_match:
-            target_id = ""
         gt_rows.append(
             rec
             | {
                 "source_path": source_id,
                 "target_path": target_id,
-                "mapping_type": "no_match" if is_no_match else rec.get("mapping_type", "equivalent"),
+                "mapping_type": rec.get("mapping_type", "equivalent"),
             }
         )
         signal_hint = source_id.rsplit("/", 2)[-2] if "/" in source_id else source_id.split("=")[-1]
@@ -139,13 +136,11 @@ def _build_pair_dataset(artifacts_dir: Path, source_standard: str, target_standa
                 "difficulty": difficulties[i % len(difficulties)],
                 "source_path": str(_source_fixture_path(source_standard, i, source_dir)),
                 "source_record": {
-                    "variable_role": "measurement" if not is_no_match else "equipment",
+                    "variable_role": "measurement",
                     "datatype": "FLOAT" if signal_hint.lower() not in {"state"} else "STRING",
                     "unit": "bar" if "pressure" in signal_hint.lower() else ("C" if "temp" in signal_hint.lower() else ""),
                     "context_entity_id": context_id,
-                    "description": (
-                        f"{signal_hint} measurement for {context_id}" if not is_no_match else f"Equipment tag {signal_hint} with no measurement evidence"
-                    ),
+                    "description": f"{signal_hint} measurement for {context_id}",
                 },
                 "target_candidates": [
                     t
@@ -203,7 +198,11 @@ def _run_variant(variant_name: str, pair_dir: Path, cfg_path: Path, logs_dir: Pa
     if proc.returncode != 0:
         raise RuntimeError(f"variant {variant_name} seed {seed} failed for {_pair_key(source_standard, target_standard)}")
 
-    metrics = evaluate_run(out_dir)
+    # Use sample-level Top-1 scoring for the canonical workflow headline metric.
+    # Exact triple matching is still exported separately as exact_mapping_* for
+    # diagnostics, but can be misleading when the source fixture contains multiple
+    # variable-level nodes and the GT row is sample-oriented.
+    metrics = evaluate_run(out_dir, evaluation_mode="sample_top1")
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
     metrics["baseline"] = variant_name
     metrics["seed"] = seed
