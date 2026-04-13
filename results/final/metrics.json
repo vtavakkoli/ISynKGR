@@ -21,7 +21,7 @@
     "f1": 0.18181818181818182,
     "validity_pass_rate": 1.0,
     "violation_counts": {},
-    "baseline": "isynkgr_hybrid"
+    "baseline": "full framework"
   },
   {
     "precision": 1.0,

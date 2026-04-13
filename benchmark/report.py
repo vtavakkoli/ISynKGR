@@ -177,8 +177,8 @@ def _scenario_type(scenario: str) -> str:
         return ablation_breakdown[key]
     if key.startswith("ablation_"):
         return "ablation_other"
-    if "hybrid" in key or "adaptive" in key or "full" in key:
-        return "hybrid"
+    if "hybrid" in key or "adaptive" in key or "full_framework" in key:
+        return "full framework"
     if "rule" in key:
         return "rules-focused"
     if "graph" in key or "rag" in key or "retrieval" in key:
