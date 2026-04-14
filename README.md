@@ -24,6 +24,9 @@ This repository provides one canonical benchmarking workflow that:
 docker compose up --build full-run
 ```
 
+Default full-run executes **20 seeds per pair** (120 runs per scenario across the 6 configured pairs).  
+Override with `RUNS_PER_PAIR=<n>` or explicit `BENCHMARK_SEEDS=11,23,...`.
+
 ### Full canonical run (Local Python)
 
 ```bash
