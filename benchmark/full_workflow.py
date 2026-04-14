@@ -186,10 +186,11 @@ def _synthetic_id_for_standard(standard: str, idx: int, default: str, source_pat
             return f"opcua://ns=2;s={raw_name}"
         return f"opcua://ns=2;s={signal.capitalize()}{idx}"
     if s == "AAS":
-        submodel_id, element_id = _peek_aas_element(source_path) if source_path else (None, None)
+        _, element_id = _peek_aas_element(source_path) if source_path else (None, None)
         if element_id:
-            return f"aas://{submodel_id or f'sm-{idx}'}/submodel/default/element/{element_id}"
-        return f"aas://sm-{idx}/submodel/default/element/{signal}"
+            element = _normalize_signal_hint(element_id, idx)
+            return f"aas://asset-{idx}/submodel/default/element/{element}/value"
+        return f"aas://asset-{idx}/submodel/default/element/{signal}/value"
     if s == "IEEE1451":
         channel_id = "Channel1" if signal == "state" else "Channel0"
         return f"ieee1451://teds0/{channel_id}/value"
