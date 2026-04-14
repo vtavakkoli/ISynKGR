@@ -1,5 +1,6 @@
 {
   "seed": 42,
+  "runs_per_pair": 20,
   "run_id_prefix": "run",
   "standards": ["OPCUA", "AAS", "IEEE1451", "IEC61499", "ISO15926"],
   "pairs": [

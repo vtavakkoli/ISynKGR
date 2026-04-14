@@ -1,7 +1,25 @@
 from pathlib import Path
 import shutil
 
-from benchmark.full_workflow import run_full_workflow
+from benchmark.full_workflow import _resolve_seeds, run_full_workflow
+
+
+def test_resolve_seeds_defaults_to_twenty_runs(monkeypatch):
+    monkeypatch.delenv("BENCHMARK_SEEDS", raising=False)
+    monkeypatch.delenv("RUNS_PER_PAIR", raising=False)
+
+    seeds = _resolve_seeds({})
+
+    assert len(seeds) == 20
+    assert seeds[:3] == [11, 23, 37]
+
+
+def test_resolve_seeds_honors_env_list(monkeypatch):
+    monkeypatch.setenv("BENCHMARK_SEEDS", "5, 7,11")
+
+    seeds = _resolve_seeds({})
+
+    assert seeds == [5, 7, 11]
 
 
 def test_full_workflow_fast_mode_generates_artifacts(monkeypatch):
@@ -9,6 +27,7 @@ def test_full_workflow_fast_mode_generates_artifacts(monkeypatch):
     monkeypatch.setenv("BENCHMARK_CONFIG", "benchmark/benchmark_full.json")
     monkeypatch.setenv("PROFILE", "fast")
     monkeypatch.setenv("RUN_ID", run_id)
+    monkeypatch.setenv("RUNS_PER_PAIR", "1")
 
     try:
         rc = run_full_workflow()

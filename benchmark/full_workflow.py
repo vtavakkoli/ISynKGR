@@ -18,7 +18,8 @@ from benchmark.validate_dataset import validate_or_generate
 from isynkgr.icr.mapping_schema import ingest_mapping_payload
 from isynkgr.pipeline.adaptive_candidate_ranker import ADAPTERS
 
-SEEDS = [11, 23, 37]
+DEFAULT_SEEDS = [11, 23, 37]
+DEFAULT_RUNS_PER_PAIR = 20
 
 
 def _now_run_id(prefix: str) -> str:
@@ -27,6 +28,24 @@ def _now_run_id(prefix: str) -> str:
 
 def _load_config(path: Path) -> dict:
     return json.loads(path.read_text())
+
+
+def _resolve_seeds(cfg: dict) -> list[int]:
+    env_seeds = os.getenv("BENCHMARK_SEEDS", "").strip()
+    if env_seeds:
+        seeds = [int(token.strip()) for token in env_seeds.split(",") if token.strip()]
+        if not seeds:
+            raise ValueError("BENCHMARK_SEEDS is set but no valid integer seed values were provided.")
+        return seeds
+
+    runs_per_pair = int(os.getenv("RUNS_PER_PAIR", str(cfg.get("runs_per_pair", DEFAULT_RUNS_PER_PAIR))))
+    if runs_per_pair <= 0:
+        raise ValueError("RUNS_PER_PAIR must be a positive integer.")
+
+    seeds = list(DEFAULT_SEEDS)
+    while len(seeds) < runs_per_pair:
+        seeds.append(seeds[-1] + 17)
+    return seeds[:runs_per_pair]
 
 
 def _artifact_paths(run_id: str) -> tuple[Path, Path]:
@@ -361,6 +380,7 @@ def _write_error_tables(artifacts_dir: Path, rows: list[dict]) -> None:
 
 def run_full_workflow() -> int:
     cfg = _load_config(Path(os.getenv("BENCHMARK_CONFIG", "benchmark/benchmark_full.json")))
+    seeds = _resolve_seeds(cfg)
     run_id = os.getenv("RUN_ID", _now_run_id(cfg.get("run_id_prefix", "run")))
     artifacts_dir, compat_dir = _artifact_paths(run_id)
     logs_dir = artifacts_dir / "logs"
@@ -381,7 +401,7 @@ def run_full_workflow() -> int:
                 continue
             pair_dir = _build_pair_dataset(artifacts_dir, source_standard, target_standard, max_rows)
             for variant in variants:
-                for seed in SEEDS:
+                for seed in seeds:
                     metrics, _ = _run_variant(variant, pair_dir, Path("benchmark/config.json"), logs_dir, seed, source_standard, target_standard)
                     rows.append(metrics)
 
