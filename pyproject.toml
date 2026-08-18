@@ -74,3 +74,9 @@ addopts = "-ra"
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+
+[tool.ruff.lint]
+# Keep the CI lint contract stable across Ruff releases. Ruff's upstream default
+# rule set evolves over time, so new rule families should be enabled deliberately
+# in focused cleanup changes instead of appearing implicitly after a tool upgrade.
+select = ["E4", "E7", "E9", "F"]
