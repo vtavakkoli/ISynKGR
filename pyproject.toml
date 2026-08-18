@@ -1,14 +1,40 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "isynkgr"
 version = "0.2.0"
-description = "Industrial Semantic Knowledge Graph Reasoner translation and benchmark framework"
+description = "Adaptive benchmark framework for cross-standard semantic interoperability in industrial systems"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
+authors = [
+  { name = "Kabeh Mohsenzadegan" },
+  { name = "Vahid Tavakkoli" },
+  { name = "Kyandoghere Kyamakya" },
+]
+keywords = [
+  "semantic interoperability",
+  "industrial automation",
+  "knowledge graphs",
+  "OPC UA",
+  "Asset Administration Shell",
+  "IEEE 1451",
+  "IEC 61499",
+  "ISO 15926",
+  "benchmarking",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
   "pydantic>=2.6,<3",
   "matplotlib>=3.8,<4",
@@ -16,10 +42,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "build>=1.2,<2",
   "pytest>=8,<9",
+  "pytest-cov>=5,<7",
   "ruff>=0.6,<1",
 ]
-
 benchmark = [
   "matplotlib>=3.8,<4",
 ]
@@ -28,8 +55,22 @@ benchmark = [
 isynkgr-benchmark = "isynkgr.cli:run_bench_cli"
 isynkgr-gen-samples = "isynkgr.cli:gen_samples_main"
 
+[project.urls]
+Homepage = "https://github.com/vtavakkoli/ISynKGR"
+Repository = "https://github.com/vtavakkoli/ISynKGR"
+Issues = "https://github.com/vtavakkoli/ISynKGR/issues"
+Documentation = "https://github.com/vtavakkoli/ISynKGR/tree/main/docs"
+
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["isynkgr*", "benchmark*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
