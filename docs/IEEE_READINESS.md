@@ -1,45 +1,84 @@
-# IEEE Publication-Ready Benchmark Protocol
+# Publication-Ready Benchmark Protocol
 
-## Problem Definition
-This repository benchmarks adaptive semantic interoperability across heterogeneous industrial standards under controlled dataset tiers and cross-standard pairs.
+## Problem definition
 
-## Dataset Generation Method
-- Generator uses deterministic seeds and writes `dataset.jsonl` + `ground_truth.jsonl`.
-- Pairs include `OPCUA↔AAS`, `IEEE1451↔IEC61499`, and `ISO15926↔AAS`.
-- Tiers include `synthetic`, `noisy`, and `realistic`.
-- Default full-run size is 180 samples.
+ISynKGR benchmarks adaptive semantic interoperability across heterogeneous industrial standards under controlled dataset tiers, source/target pairs, scenario configurations, and repeatable seed policies.
 
-## Benchmark Protocol
-1. Run all variants across at least 3 seeds.
-2. Evaluate exact-match precision/recall/F1 and retrieval hit@k.
-3. Record latency, runtime, token proxy counts, and peak memory.
-4. Aggregate as mean ± std with 95% CI.
+## Associated publication
 
-## Experiment Setup
-- Runtime: Docker `full-run` service.
-- Model: `MODEL_NAME` env var (default `gemma4:e2b`).
-- Seeds: `[11, 23, 37]` in `benchmark/full_workflow.py`.
-- Dataset version: generated artifact dataset + `datasets/v1/crosswalk/gt_mappings.jsonl`.
+Mohsenzadegan, K., Tavakkoli, V., & Kyamakya, K. (2026). **ISynKGR: An Adaptive Benchmark Framework for Cross-Standard Semantic Interoperability.** Accepted for presentation at AI2M4RI 2026, in conjunction with the 23rd International Conference on Mobile Systems and Pervasive Computing (MobiSPC), Athens, Greece, August 18–20, 2026.
 
-## Error Analysis Taxonomy
-- Cardinality issues
-- Wrong semantic mapping
-- Retrieval failures
-- LLM hallucinations
+## Dataset generation method
 
-## Threats to Validity
-- LLM token usage is estimated with whitespace token proxy in offline mode.
-- Retrieval quality depends on available graph evidence.
-- Some pairs may require richer domain fixtures for external validity.
+- The generator uses deterministic seeds and writes `dataset.jsonl` and `ground_truth.jsonl`.
+- Configured pairs include `OPCUA↔AAS`, `IEEE1451↔IEC61499`, and `ISO15926↔AAS` directions represented as six source/target pairs.
+- Dataset tiers include `synthetic`, `noisy`, and `realistic` labels in the benchmark workflow.
+- Canonical target-path formatting is shared by generation and evaluation.
+
+## Canonical benchmark protocol
+
+1. Execute all configured scenarios for every supported pair.
+2. Use the configured 20-run-per-pair seed policy, or record an explicit `BENCHMARK_SEEDS` override.
+3. Evaluate sample-level Top-1 headline metrics and retain exact-mapping diagnostics.
+4. Record retrieval metrics, runtime, error analysis, robustness statistics, and skipped pairs.
+5. Aggregate repeated runs with mean, standard deviation, and confidence intervals where supported by the report pipeline.
+6. Preserve the complete artifact directory and repository revision.
+
+## Experiment setup
+
+- Runtime: local Python or Docker Compose `full-run` service.
+- Canonical entrypoint: `python -m benchmark.orchestrate`.
+- Model: controlled through `MODEL_NAME`; LLM-backed scenarios require a reachable Ollama endpoint.
+- Seed policy: default resolved by `benchmark/full_workflow.py` from the benchmark configuration; explicit `BENCHMARK_SEEDS` takes precedence.
+- Dataset version: generated artifact dataset plus versioned fixtures under `datasets/v1/`.
+
+## Error-analysis taxonomy
+
+The reporting pipeline surfaces categories such as:
+
+- schema-invalid predictions;
+- cardinality issues;
+- retrieval failures;
+- LLM hallucination diagnostics;
+- false positives and false negatives.
+
+## Threats to validity
+
+- Parts of the benchmark remain synthetic or synthetic-heavy.
+- Adapter coverage is scoped and is not full standards conformance.
+- LLM-backed scenarios are model- and runtime-dependent.
+- Strict path-based diagnostics are sensitive to canonicalization conventions.
+- External validity requires independently curated industrial datasets beyond repository fixtures.
+- Runtime comparisons require controlled hardware and software environments.
 
 ## Reproducibility
-Run:
+
+Canonical Docker run:
 
 ```bash
-docker-compose up --build full-run
+docker compose up --build full-run
 ```
 
-Expected outputs:
-- `results/final_report.html`
-- `artifacts/<RUN_ID>/metrics.json`
-- `artifacts/<RUN_ID>/plots/*`
+Canonical local run:
+
+```bash
+RUNS_PER_PAIR=20 PYTHONPATH=. python -m benchmark.orchestrate
+```
+
+Small environment-validation run:
+
+```bash
+RUNS_PER_PAIR=1 MAX_ITEMS=5 PYTHONPATH=. python -m benchmark.orchestrate
+```
+
+Expected outputs include:
+
+- `artifacts/<RUN_ID>/metrics.json`;
+- `artifacts/<RUN_ID>/metrics/advanced_analysis.json`;
+- `artifacts/<RUN_ID>/metrics/error_summary.csv`;
+- pair/scenario/seed result directories;
+- `artifacts/<RUN_ID>/report.md`;
+- `artifacts/<RUN_ID>/report.html`;
+- convenience outputs under `results/`, including the final HTML report generated by orchestration.
+
+For publication use, follow `docs/REPRODUCIBILITY.md` and record the exact Git revision, configuration, seed policy, model/runtime settings, and artifact identifier.

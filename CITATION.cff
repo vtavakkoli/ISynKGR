@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use ISynKGR in research, please cite the software and the associated AI2M4RI 2026 publication described in docs/PUBLICATION.md."
+title: "ISynKGR: Adaptive Benchmark Framework for Cross-Standard Semantic Interoperability"
+type: software
+authors:
+  - family-names: Mohsenzadegan
+    given-names: Kabeh
+  - family-names: Tavakkoli
+    given-names: Vahid
+  - family-names: Kyamakya
+    given-names: Kyandoghere
+repository-code: "https://github.com/vtavakkoli/ISynKGR"
+url: "https://github.com/vtavakkoli/ISynKGR"
+version: 0.2.0
+license: MIT
+keywords:
+  - semantic interoperability
+  - industrial automation
+  - knowledge graphs
+  - OPC UA
+  - Asset Administration Shell
+  - IEEE 1451
+  - IEC 61499
+  - ISO 15926
+  - benchmarking
+abstract: >-
+  ISynKGR is a reproducible research benchmark and reference implementation for
+  evaluating semantic mapping across heterogeneous industrial standards. It
+  combines deterministic adapters, retrieval, rules, ranking, optional LLM
+  reasoning, multi-seed experiment orchestration, strict evaluation, and
+  publication-oriented reporting.
